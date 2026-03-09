@@ -1,0 +1,21 @@
+services:
+  dashboard:
+    image: python:3.11-slim
+    container_name: odoo-dashboard
+    working_dir: /app
+    env_file: .env
+    volumes:
+      - ./app.py:/app/app.py:ro
+      - ./config.py:/app/config.py:ro
+      - ./requirements.txt:/app/requirements.txt:ro
+      - ./templates:/app/templates:ro
+      - ./static:/app/static:ro
+      - /home/parallels/odoo-dev/projects:/home/parallels/odoo-dev/projects:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "8891:8891"
+    command: >
+      bash -c "apt-get update -qq && apt-get install -y -qq docker.io
+      && pip install -r requirements.txt --quiet
+      && python app.py"
+    restart: unless-stopped
