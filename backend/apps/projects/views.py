@@ -39,6 +39,9 @@ def api_status(request):
             p['container_id'] = docker.containers.get(p['container']).short_id
         except Exception:
             p['container_id'] = None
+        # Add branch info
+        p['branch'], pending = get_git_info(p.get('folder'))
+        p['pending_count'] = len(pending)
     return Response({'projects': projects})
 
 

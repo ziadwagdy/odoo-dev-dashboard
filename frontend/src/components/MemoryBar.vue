@@ -1,19 +1,16 @@
 <template>
-  <div class="card flex-1">
-    <div class="flex justify-between items-center mb-2">
-      <span class="text-xs text-slate-500">Memory</span>
-      <span class="text-xs font-mono text-slate-300">{{ memText }}</span>
+  <div class="flex flex-col gap-2">
+    <div class="flex justify-between items-center">
+      <span class="text-sm font-semibold text-slate-300">Memory</span>
+      <span class="text-xs font-mono text-slate-400">{{ memText }}</span>
     </div>
-    <div class="h-2 rounded-full bg-[#2d3148] overflow-hidden">
+    <div class="h-3 rounded-full bg-surface-hover overflow-hidden border border-border/50 shadow-inner">
       <div class="h-full rounded-full transition-all duration-500"
         :style="{ width: pct + '%' }"
-        :class="{
-          'bg-red-500': pct > 90,
-          'bg-amber-500': pct > 75 && pct <= 90,
-          'bg-[#6366f1]': pct <= 75,
-        }"
+        :class="barColorClass"
       />
     </div>
+    <span class="text-xs text-slate-400 font-semibold">{{ pct.toFixed(1) }}%</span>
   </div>
 </template>
 
@@ -37,6 +34,13 @@ const pct = computed(() => {
 const memText = computed(() => {
   if (!memUsed.value || !memLimit.value) return '-- / -- MB'
   return `${memUsed.value.toFixed(0)} / ${memLimit.value.toFixed(0)} MB`
+})
+
+const barColorClass = computed(() => {
+  const p = pct.value
+  if (p > 90) return 'bg-gradient-to-r from-red-500 to-rose-400'
+  if (p > 75) return 'bg-gradient-to-r from-amber-500 to-orange-400'
+  return 'bg-gradient-to-r from-primary to-accent'
 })
 
 // If direct values are provided, use them and skip SSE

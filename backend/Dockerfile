@@ -4,7 +4,7 @@ FROM python:3.12-slim
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git postgresql-client \
+    git postgresql-client openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

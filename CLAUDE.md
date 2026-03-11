@@ -5,7 +5,7 @@ Modern Odoo development dashboard rewritten in Django + Vue 3. Replaces the old 
 ## Running the project
 
 ```bash
-# From dashboard-new/
+# From dashboard/
 docker compose up -d          # start all services
 docker compose logs -f        # tail logs
 docker compose logs -f backend  # backend only

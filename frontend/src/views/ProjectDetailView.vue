@@ -1,33 +1,68 @@
 <template>
-  <div class="max-w-7xl mx-auto px-6 py-8">
+  <div class="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-10">
     <!-- Back + header -->
-    <div class="flex items-center gap-4 mb-6">
-      <RouterLink to="/" class="text-slate-500 hover:text-white transition-colors">← Back</RouterLink>
-      <div class="flex items-center gap-3">
-        <h1 class="text-xl font-bold text-white capitalize">{{ name }}</h1>
+    <div class="flex flex-col sm:flex-row sm:items-center gap-3 md:gap-4 mb-6 md:mb-8">
+      <RouterLink to="/" class="btn btn-ghost btn-sm">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
+        Back
+      </RouterLink>
+      <div class="hidden sm:block h-6 w-px bg-border"></div>
+      <div class="flex flex-wrap items-center gap-2 md:gap-4 flex-1">
+        <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-white to-accent-light bg-clip-text text-transparent capitalize">{{ name }}</h1>
         <StatusBadge v-if="project" :status="project.status as string" />
         <a
           v-if="project && project.container_id && config.logsUrl"
           :href="config.logsUrl + '/container/' + project.container_id"
           target="_blank"
           rel="noopener"
-          class="btn btn-ghost btn-sm text-xs"
-        >📜 Logs</a>
+          class="btn btn-ghost btn-sm sm:ml-auto"
+        >
+          📜 Logs
+        </a>
       </div>
     </div>
 
-    <div v-if="!project" class="text-center py-20 text-slate-500">Loading…</div>
+    <div v-if="!project" class="text-center py-20 md:py-32 text-slate-400">
+      <div class="inline-block w-10 h-10 md:w-12 md:h-12 border-4 border-accent/30 border-t-accent rounded-full animate-spin mb-4"></div>
+      <p class="text-base md:text-lg font-medium">Loading project…</p>
+    </div>
 
     <template v-else>
       <!-- Gauges row -->
-      <div class="flex gap-4 mb-6">
-        <CpuGauge :container="project.container as string" />
-        <MemoryBar :container="project.container as string" />
-        <div class="flex-1 card flex items-center gap-3 flex-wrap">
-          <button class="btn btn-ghost btn-sm" @click="restart">↺ Restart</button>
-          <button class="btn btn-danger btn-sm" @click="stop">⏹ Stop</button>
-          <button class="btn btn-primary btn-sm" @click="deploy">⬆ Deploy</button>
-          <a v-if="project.url" :href="'https://' + project.url" target="_blank" class="btn btn-ghost btn-sm">↗ Open</a>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5 mb-6 md:mb-8">
+        <div class="card flex items-center justify-center py-4">
+          <CpuGauge :container="project.container as string" />
+        </div>
+        <div class="card">
+          <MemoryBar :container="project.container as string" />
+        </div>
+        <div class="card flex flex-col gap-2 md:gap-3">
+          <button class="btn btn-ghost" @click="restart">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            Restart
+          </button>
+          <button class="btn btn-danger" @click="stop">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd"></path>
+            </svg>
+            Stop
+          </button>
+          <button class="btn btn-primary" @click="deploy">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+            </svg>
+            Deploy
+          </button>
+          <a v-if="project.url" :href="'https://' + project.url" target="_blank" class="btn btn-ghost">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+            </svg>
+            Open
+          </a>
         </div>
       </div>
 
@@ -35,11 +70,11 @@
       <DeployPanel :project-name="name" ref="deployPanel" />
 
       <!-- Tabs -->
-      <div class="border-b border-[#2d3148] mb-6 flex gap-1">
+      <div class="border-b border-border mb-6 flex gap-0.5 md:gap-1 overflow-x-auto">
         <button
           v-for="tab in tabs"
           :key="tab.id"
-          class="tab-btn"
+          class="tab-btn text-xs md:text-sm whitespace-nowrap"
           :class="{ active: activeTab === tab.id }"
           @click="activeTab = tab.id"
         >{{ tab.label }}</button>
@@ -48,36 +83,36 @@
       <!-- Tab content -->
       <div v-show="activeTab === 'overview'">
         <!-- Stack info -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-5 mb-6">
           <div class="card">
-            <div class="text-xs text-slate-500 mb-1">Container</div>
-            <div class="font-mono text-sm">{{ project.container }}</div>
+            <div class="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Container</div>
+            <div class="font-mono text-sm text-white">{{ project.container }}</div>
           </div>
           <div class="card">
-            <div class="text-xs text-slate-500 mb-1">Branch</div>
-            <div class="font-mono text-sm">{{ project.branch || '—' }}</div>
+            <div class="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Branch</div>
+            <div class="font-mono text-sm text-white">{{ project.branch || '—' }}</div>
           </div>
           <div class="card">
-            <div class="text-xs text-slate-500 mb-1">Odoo Port</div>
-            <div class="font-mono text-sm">{{ project.odoo_port }}</div>
+            <div class="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Odoo Port</div>
+            <div class="font-mono text-sm text-white">{{ project.odoo_port }}</div>
           </div>
           <div class="card">
-            <div class="text-xs text-slate-500 mb-1">DB Port</div>
-            <div class="font-mono text-sm">{{ project.db_port }}</div>
+            <div class="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">DB Port</div>
+            <div class="font-mono text-sm text-white">{{ project.db_port }}</div>
           </div>
         </div>
         <!-- Addons paths -->
         <div class="card mb-4" v-if="(project.addons_paths as unknown[])?.length">
-          <h3 class="text-sm font-semibold mb-3 text-slate-300">Addons Paths</h3>
-          <div class="space-y-1">
-            <div v-for="ap in project.addons_paths as AddonPath[]" :key="ap.path" class="flex items-center gap-2 text-xs">
-              <span class="px-1.5 py-0.5 rounded text-xs font-mono"
+          <h3 class="text-sm font-bold mb-4 text-slate-200 uppercase tracking-wider">Addons Paths</h3>
+          <div class="space-y-2">
+            <div v-for="ap in project.addons_paths as AddonPath[]" :key="ap.path" class="flex items-center gap-3 text-xs">
+              <span class="px-2.5 py-1 rounded-lg text-xs font-mono font-semibold"
                 :class="{
-                  'bg-blue-900/40 text-blue-300': ap.kind === 'core',
-                  'bg-amber-900/40 text-amber-300': ap.kind === 'enterprise',
-                  'bg-green-900/40 text-green-300': ap.kind === 'extra',
-                  'bg-purple-900/40 text-purple-300': ap.kind === 'project' || ap.kind === 'project-sub',
-                  'bg-slate-800 text-slate-400': ap.kind === 'other',
+                  'bg-gradient-to-r from-blue-500/20 to-blue-600/20 text-blue-300 border border-blue-500/40': ap.kind === 'core',
+                  'bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 border border-amber-500/40': ap.kind === 'enterprise',
+                  'bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-300 border border-green-500/40': ap.kind === 'extra',
+                  'bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 border border-purple-500/40': ap.kind === 'project' || ap.kind === 'project-sub',
+                  'bg-slate-800/50 text-slate-400 border border-slate-700/50': ap.kind === 'other',
                 }">{{ ap.label }}</span>
               <code class="text-slate-500">{{ ap.path }}</code>
             </div>
@@ -125,7 +160,7 @@
       <LogViewer v-show="activeTab === 'logs'" :container="project.container as string" :active="activeTab === 'logs'" />
       <DatabaseTab v-show="activeTab === 'database'" :project-name="name" :active="activeTab === 'database'" />
       <ModulesTab v-show="activeTab === 'modules'" :project-name="name" :active="activeTab === 'modules'" />
-      <BranchTab v-show="activeTab === 'branches'" :project-name="name" :folder="(project.folder as string | null)" :active="activeTab === 'branches'" />
+      <BranchTab v-show="activeTab === 'branches'" :project-name="name" :folder="(project.folder as string | null)" :container="(project.container as string)" :active="activeTab === 'branches'" />
       <SettingsTab v-show="activeTab === 'settings'" :project-name="name" :active="activeTab === 'settings'" />
       <NotebookTab v-show="activeTab === 'notebook'" :project-name="name" :active="activeTab === 'notebook'" />
     </template>
