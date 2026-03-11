@@ -56,15 +56,21 @@
           Clear
         </button>
       </div>
-      <pre class="log-output h-48 whitespace-pre-wrap text-xs">{{ switchOutput }}</pre>
+      <pre class="log-output min-h-[8rem] max-h-[40vh] md:max-h-[12rem] whitespace-pre-wrap text-xs">{{ switchOutput }}</pre>
     </div>
 
     <div class="card mb-4">
-      <div class="flex items-center justify-between mb-4">
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-4">
         <h3 class="text-sm font-semibold text-slate-300">Branches</h3>
         <div class="flex gap-2">
-          <button class="btn btn-ghost btn-sm" @click="gitPull">↓ Pull</button>
-          <button class="btn btn-ghost btn-sm" @click="load">↺ Refresh</button>
+          <button class="btn btn-ghost btn-sm flex-1 sm:flex-none inline-flex items-center gap-1.5" @click="gitPull">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+            Pull
+          </button>
+          <button class="btn btn-ghost btn-sm flex-1 sm:flex-none inline-flex items-center gap-1.5" @click="load">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            Refresh
+          </button>
         </div>
       </div>
       
@@ -105,14 +111,14 @@
           </div>
           <div v-else class="space-y-1">
             <div v-for="b in filteredLocal" :key="b"
-              class="flex items-center justify-between p-2 rounded-lg hover:bg-surface-hover/50 transition-colors">
-              <div class="flex items-center gap-2">
-                <span v-if="b === data.current" class="w-1.5 h-1.5 rounded-full bg-green-400" />
-                <span v-else class="w-1.5 h-1.5 rounded-full bg-slate-600" />
-                <span class="font-mono text-sm" :class="b === data.current ? 'text-white' : 'text-slate-400'">{{ b }}</span>
-                <span v-if="b === data.current" class="text-xs text-green-400">(current)</span>
+              class="flex items-center justify-between gap-2 p-2 rounded-lg hover:bg-surface-hover/50 transition-colors min-w-0">
+              <div class="flex items-center gap-2 min-w-0 flex-1">
+                <span v-if="b === data.current" class="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
+                <span v-else class="w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0" />
+                <span class="font-mono text-sm truncate" :class="b === data.current ? 'text-white' : 'text-slate-400'" :title="b">{{ b }}</span>
+                <span v-if="b === data.current" class="text-xs text-green-400 shrink-0">(current)</span>
               </div>
-              <button v-if="b !== data.current" class="btn btn-ghost btn-sm" @click="showConfirmModal = true; pendingBranch = b">Switch</button>
+              <button v-if="b !== data.current" class="btn btn-ghost btn-sm shrink-0" @click="showConfirmModal = true; pendingBranch = b">Switch</button>
             </div>
           </div>
         </div>
@@ -126,9 +132,9 @@
           </div>
           <div v-else class="space-y-1">
             <div v-for="b in filteredRemote" :key="b"
-              class="flex items-center justify-between p-2 rounded-lg hover:bg-surface-hover/50 transition-colors">
-              <span class="font-mono text-sm text-slate-500">{{ b }}</span>
-              <button class="btn btn-ghost btn-sm" @click="showConfirmModal = true; pendingBranch = b.replace('origin/', '')">Checkout</button>
+              class="flex items-center justify-between gap-2 p-2 rounded-lg hover:bg-surface-hover/50 transition-colors min-w-0">
+              <span class="font-mono text-sm text-slate-500 truncate min-w-0" :title="b">{{ b }}</span>
+              <button class="btn btn-ghost btn-sm shrink-0" @click="showConfirmModal = true; pendingBranch = b.replace('origin/', '')">Checkout</button>
             </div>
           </div>
         </div>
@@ -137,28 +143,35 @@
 
     <!-- Submodules -->
     <div class="card mb-4">
-      <div class="flex items-center justify-between mb-3">
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-3">
         <h3 class="text-sm font-semibold text-slate-300">Submodules</h3>
-        <button class="btn btn-ghost btn-sm" @click="updateSubmodules">⬆ Update All</button>
+        <button class="btn btn-ghost btn-sm w-full sm:w-auto inline-flex items-center gap-1.5 justify-center" @click="updateSubmodules">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+          Update All
+        </button>
       </div>
       <div v-if="!submodules.length" class="text-sm text-slate-500">No submodules.</div>
-      <table v-else class="table-base">
-        <thead><tr><th>Path</th><th>Commit</th><th>Status</th></tr></thead>
-        <tbody>
-          <tr v-for="s in submodules" :key="s.path">
-            <td class="font-mono text-xs">{{ s.path }}</td>
-            <td class="font-mono text-xs text-slate-500">{{ s.commit }}</td>
-            <td>
-              <span class="text-xs px-1.5 py-0.5 rounded"
-                :class="{
-                  'bg-green-900/40 text-green-400': s.status === 'clean',
-                  'bg-amber-900/40 text-amber-400': s.status === 'modified',
-                  'bg-red-900/40 text-red-400': s.status === 'behind',
-                }">{{ s.status }}</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div v-else class="overflow-x-auto -mx-4 sm:mx-0">
+        <div class="inline-block min-w-full px-4 sm:px-0">
+          <table class="table-base">
+            <thead><tr><th>Path</th><th>Commit</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr v-for="s in submodules" :key="s.path">
+                <td class="font-mono text-[10px] sm:text-xs">{{ s.path }}</td>
+                <td class="font-mono text-[10px] sm:text-xs text-slate-500">{{ s.commit }}</td>
+                <td>
+                  <span class="text-xs px-1.5 py-0.5 rounded"
+                    :class="{
+                      'bg-green-900/40 text-green-400': s.status === 'clean',
+                      'bg-amber-900/40 text-amber-400': s.status === 'modified',
+                      'bg-red-900/40 text-red-400': s.status === 'behind',
+                    }">{{ s.status }}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 </template>

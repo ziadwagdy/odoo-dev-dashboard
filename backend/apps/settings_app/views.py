@@ -13,7 +13,7 @@ def odoo_conf_read(request, project):
     p = get_project(project)
     if not p:
         return Response({'error': 'project not found'}, status=404)
-    data = read_odoo_conf(project)
+    data = read_odoo_conf(project, p.get('folder'))
     if isinstance(data, dict) and 'error' in data:
         return Response(data, status=404)
     return Response(data)
@@ -25,7 +25,7 @@ def odoo_conf_write(request, project):
     if not p:
         return Response({'error': 'project not found'}, status=404)
     try:
-        write_odoo_conf(project, request.data)
+        write_odoo_conf(project, request.data, p.get('folder'))
         return Response({'ok': True})
     except Exception as e:
         return Response({'ok': False, 'error': str(e)}, status=500)
@@ -36,7 +36,7 @@ def env_read(request, project):
     p = get_project(project)
     if not p:
         return Response({'error': 'project not found'}, status=404)
-    data = read_env_file(project)
+    data = read_env_file(project, p.get('folder'))
     return Response(data)
 
 
@@ -46,7 +46,7 @@ def env_write(request, project):
     if not p:
         return Response({'error': 'project not found'}, status=404)
     try:
-        write_env_file(project, request.data)
+        write_env_file(project, request.data, p.get('folder'))
         return Response({'ok': True})
     except Exception as e:
         return Response({'ok': False, 'error': str(e)}, status=500)

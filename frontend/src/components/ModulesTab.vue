@@ -1,13 +1,14 @@
 <template>
   <div class="card">
-    <div class="flex items-center gap-3 mb-4">
-      <select v-model="selectedDb" class="input" @change="loadModules">
+    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-4">
+      <select v-model="selectedDb" class="input flex-1 sm:flex-none sm:w-auto" @change="loadModules">
         <option value="">Select database…</option>
         <option v-for="db in dbs" :key="db" :value="db">{{ db }}</option>
       </select>
       <input v-model="filter" class="input flex-1" placeholder="Filter modules…" />
-      <button v-if="pendingCount > 0" class="btn btn-primary btn-sm" @click="updatePending">
-        ⬆ Update {{ pendingCount }} pending
+      <button v-if="pendingCount > 0" class="btn btn-primary btn-sm w-full sm:w-auto inline-flex items-center gap-1.5" @click="updatePending">
+        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+        Update {{ pendingCount }} pending
       </button>
     </div>
 
@@ -15,46 +16,51 @@
     <div v-else-if="error" class="text-sm text-red-400">{{ error }}</div>
 
     <div v-for="group in filteredGroups" :key="group.label" class="mb-4">
-      <div class="flex items-center gap-2 py-2 border-b border-[#2d3148] cursor-pointer"
+      <div class="flex items-center gap-2 py-2 border-b border-[#2d3148] cursor-pointer min-w-0"
         @click="toggleGroup(group.label)">
-        <span class="text-slate-500 text-xs">{{ collapsed.has(group.label) ? '▸' : '▾' }}</span>
-        <span class="text-sm font-medium text-slate-300">{{ group.label }}</span>
-        <code class="text-xs text-slate-600">{{ group.path }}</code>
-        <span class="ml-auto text-xs text-slate-500">{{ group.modules.length }} modules</span>
-        <span v-if="pendingInGroup(group) > 0" class="text-xs text-amber-400">↯ {{ pendingInGroup(group) }} pending</span>
+        <span class="text-slate-500 text-xs shrink-0">{{ collapsed.has(group.label) ? '▸' : '▾' }}</span>
+        <span class="text-sm font-medium text-slate-300 shrink-0">{{ group.label }}</span>
+        <code class="text-xs text-slate-600 truncate min-w-0 flex-1" :title="group.path">{{ group.path }}</code>
+        <span class="text-xs text-slate-500 shrink-0">{{ group.modules.length }} modules</span>
+        <span v-if="pendingInGroup(group) > 0" class="text-xs text-amber-400 shrink-0">{{ pendingInGroup(group) }} pending</span>
       </div>
-      <div v-if="!collapsed.has(group.label)">
-        <table class="table-base">
-          <thead><tr><th>Module</th><th>State</th><th>Version</th><th>Action</th></tr></thead>
-          <tbody>
-            <tr v-for="mod in group.modules" :key="mod.name"
-              v-show="!filter || mod.name.toLowerCase().includes(filter.toLowerCase())">
-              <td class="font-mono text-xs">{{ mod.name }}</td>
-              <td>
-                <span class="text-xs px-1.5 py-0.5 rounded"
-                  :class="{
-                    'bg-green-900/40 text-green-400': mod.state === 'installed',
-                    'bg-amber-900/40 text-amber-400': mod.state === 'to upgrade',
-                    'bg-red-900/40 text-red-400': mod.state === 'to remove',
-                    'bg-slate-800 text-slate-500': mod.state === 'uninstalled',
-                  }">{{ mod.state }}</span>
-              </td>
-              <td class="text-slate-500 text-xs">{{ mod.version || '—' }}</td>
-              <td>
-                <button v-if="['installed', 'to upgrade'].includes(mod.state)"
-                  class="btn btn-ghost btn-sm"
-                  @click="updateModule(mod.name)">⬆ Update</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <div v-if="!collapsed.has(group.label)" class="overflow-x-auto -mx-4 sm:mx-0">
+        <div class="inline-block min-w-full px-4 sm:px-0">
+          <table class="table-base">
+            <thead><tr><th>Module</th><th>State</th><th class="hidden sm:table-cell">Version</th><th>Action</th></tr></thead>
+            <tbody>
+              <tr v-for="mod in group.modules" :key="mod.name"
+                v-show="!filter || mod.name.toLowerCase().includes(filter.toLowerCase())">
+                <td class="font-mono text-[10px] sm:text-xs">{{ mod.name }}</td>
+                <td>
+                  <span class="text-xs px-1.5 py-0.5 rounded"
+                    :class="{
+                      'bg-green-900/40 text-green-400': mod.state === 'installed',
+                      'bg-amber-900/40 text-amber-400': mod.state === 'to upgrade',
+                      'bg-red-900/40 text-red-400': mod.state === 'to remove',
+                      'bg-slate-800 text-slate-500': mod.state === 'uninstalled',
+                    }">{{ mod.state }}</span>
+                </td>
+                <td class="hidden sm:table-cell text-slate-500 text-xs">{{ mod.version || '—' }}</td>
+                <td>
+                  <button v-if="['installed', 'to upgrade'].includes(mod.state)"
+                    class="btn btn-ghost btn-sm inline-flex items-center p-1.5"
+                    @click="updateModule(mod.name)"
+                    title="Update module">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
     <!-- Module update output -->
     <div v-if="updateOutput" class="mt-4 card border-[#6366f1]/30">
       <div class="text-xs font-medium text-slate-400 mb-2">Updating: {{ updatingModule }}</div>
-      <pre class="log-output h-48 whitespace-pre-wrap text-xs">{{ updateOutput }}</pre>
+      <pre class="log-output min-h-[8rem] max-h-[40vh] md:max-h-[12rem] whitespace-pre-wrap text-xs">{{ updateOutput }}</pre>
     </div>
   </div>
 </template>

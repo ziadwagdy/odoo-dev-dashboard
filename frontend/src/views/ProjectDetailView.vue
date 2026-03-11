@@ -19,7 +19,10 @@
           rel="noopener"
           class="btn btn-ghost btn-sm sm:ml-auto"
         >
-          📜 Logs
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+          </svg>
+          Logs
         </a>
       </div>
     </div>
@@ -38,26 +41,26 @@
         <div class="card">
           <MemoryBar :container="project.container as string" />
         </div>
-        <div class="card flex flex-col gap-2 md:gap-3">
-          <button class="btn btn-ghost" @click="restart">
+        <div class="card grid grid-cols-2 sm:flex sm:flex-col gap-2 md:gap-3 min-h-[44px] sm:min-h-0">
+          <button class="btn btn-ghost min-h-[44px]" @click="restart">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
             </svg>
             Restart
           </button>
-          <button class="btn btn-danger" @click="stop">
+          <button class="btn btn-danger min-h-[44px]" @click="stop">
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd"></path>
             </svg>
             Stop
           </button>
-          <button class="btn btn-primary" @click="deploy">
+          <button class="btn btn-primary min-h-[44px]" @click="deploy">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
             </svg>
             Deploy
           </button>
-          <a v-if="project.url" :href="'https://' + project.url" target="_blank" class="btn btn-ghost">
+          <a v-if="project.url" :href="'https://' + project.url" target="_blank" class="btn btn-ghost min-h-[44px]">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
             </svg>
@@ -105,8 +108,8 @@
         <div class="card mb-4" v-if="(project.addons_paths as unknown[])?.length">
           <h3 class="text-sm font-bold mb-4 text-slate-200 uppercase tracking-wider">Addons Paths</h3>
           <div class="space-y-2">
-            <div v-for="ap in project.addons_paths as AddonPath[]" :key="ap.path" class="flex items-center gap-3 text-xs">
-              <span class="px-2.5 py-1 rounded-lg text-xs font-mono font-semibold"
+            <div v-for="ap in project.addons_paths as AddonPath[]" :key="ap.path" class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 text-xs min-w-0">
+              <span class="px-2.5 py-1 rounded-lg text-xs font-mono font-semibold shrink-0"
                 :class="{
                   'bg-gradient-to-r from-blue-500/20 to-blue-600/20 text-blue-300 border border-blue-500/40': ap.kind === 'core',
                   'bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 border border-amber-500/40': ap.kind === 'enterprise',
@@ -114,46 +117,50 @@
                   'bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 border border-purple-500/40': ap.kind === 'project' || ap.kind === 'project-sub',
                   'bg-slate-800/50 text-slate-400 border border-slate-700/50': ap.kind === 'other',
                 }">{{ ap.label }}</span>
-              <code class="text-slate-500">{{ ap.path }}</code>
+              <code class="text-slate-500 break-all">{{ ap.path }}</code>
             </div>
           </div>
         </div>
         <!-- Recent commits -->
-        <div class="card mb-4" v-if="(project.commits as unknown[])?.length">
+        <div class="card mb-4 min-w-0" v-if="(project.commits as unknown[])?.length">
           <h3 class="text-sm font-semibold mb-3 text-slate-300">Recent Commits</h3>
-          <table class="table-base">
-            <thead><tr><th>Hash</th><th>Message</th><th>Author</th><th>Date</th></tr></thead>
-            <tbody>
-              <tr v-for="c in project.commits as Commit[]" :key="c.hash">
-                <td><code class="text-slate-400">{{ c.hash }}</code></td>
-                <td class="text-slate-300">{{ c.subject }}</td>
-                <td class="text-slate-500">{{ c.author }}</td>
-                <td class="text-slate-500">{{ c.date }}</td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+            <table class="table-base min-w-[480px]">
+              <thead><tr><th>Hash</th><th>Message</th><th>Author</th><th>Date</th></tr></thead>
+              <tbody>
+                <tr v-for="c in project.commits as Commit[]" :key="c.hash">
+                  <td><code class="text-slate-400 text-xs">{{ c.hash }}</code></td>
+                  <td class="text-slate-300 max-w-[120px] sm:max-w-none truncate" :title="c.subject">{{ c.subject }}</td>
+                  <td class="text-slate-500 truncate max-w-[80px] sm:max-w-none" :title="c.author">{{ c.author }}</td>
+                  <td class="text-slate-500 text-xs whitespace-nowrap">{{ c.date }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
         <!-- Deploy history -->
-        <div class="card">
+        <div class="card min-w-0">
           <h3 class="text-sm font-semibold mb-3 text-slate-300">Deploy History</h3>
           <div v-if="history.length === 0" class="text-sm text-slate-500">No deploys yet.</div>
-          <table v-else class="table-base">
-            <thead><tr><th>Time</th><th>Type</th><th>From</th><th>To</th><th>Outcome</th><th>Duration</th></tr></thead>
-            <tbody>
-              <tr v-for="h in history as DeployRecord[]" :key="h.id">
-                <td class="text-slate-400">{{ new Date(h.triggered_at).toLocaleString() }}</td>
-                <td>{{ h.trigger_type }}</td>
-                <td><code class="text-slate-500">{{ h.prev_commit || '—' }}</code></td>
-                <td><code class="text-slate-500">{{ h.new_commit || '—' }}</code></td>
-                <td>
-                  <span :class="h.outcome === 'success' ? 'text-green-400' : 'text-red-400'">
-                    {{ h.outcome === 'success' ? '✓' : '✗' }} {{ h.outcome }}
-                  </span>
-                </td>
-                <td class="text-slate-500">{{ h.duration_seconds != null ? h.duration_seconds + 's' : '—' }}</td>
-              </tr>
-            </tbody>
-          </table>
+          <div v-else class="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+            <table class="table-base min-w-[560px]">
+              <thead><tr><th>Time</th><th>Type</th><th>From</th><th>To</th><th>Outcome</th><th>Duration</th></tr></thead>
+              <tbody>
+                <tr v-for="h in history as DeployRecord[]" :key="h.id">
+                  <td class="text-slate-400 text-xs whitespace-nowrap">{{ new Date(h.triggered_at).toLocaleString() }}</td>
+                  <td>{{ h.trigger_type }}</td>
+                  <td class="max-w-[70px] sm:max-w-[90px]"><code class="text-slate-500 text-xs truncate inline-block max-w-full align-bottom" :title="h.prev_commit || '—'">{{ h.prev_commit || '—' }}</code></td>
+                  <td class="max-w-[70px] sm:max-w-[90px]"><code class="text-slate-500 text-xs truncate inline-block max-w-full align-bottom" :title="h.new_commit || '—'">{{ h.new_commit || '—' }}</code></td>
+                  <td>
+                    <span :class="h.outcome === 'success' ? 'text-green-400' : 'text-red-400'">
+                      {{ h.outcome === 'success' ? '✓' : '✗' }} {{ h.outcome }}
+                    </span>
+                  </td>
+                  <td class="text-slate-500 text-xs">{{ h.duration_seconds != null ? h.duration_seconds + 's' : '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 

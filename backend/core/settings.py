@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     'apps.git_ops',
     'apps.settings_app',
     'apps.notebooks',
+    'apps.onboard',
 ]
 
 MIDDLEWARE = [

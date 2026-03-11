@@ -2,29 +2,29 @@
   <div class="space-y-4">
     <!-- odoo.conf -->
     <div class="card">
-      <div class="flex items-center justify-between mb-3">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
         <h3 class="text-sm font-semibold text-slate-300">odoo.conf</h3>
-        <button class="btn btn-primary btn-sm" @click="saveConf">Save</button>
+        <button class="btn btn-primary btn-sm w-full sm:w-auto" @click="saveConf">Save</button>
       </div>
       <div v-if="confError" class="text-sm text-red-400 mb-2">{{ confError }}</div>
       <div v-for="(kv, section) in conf" :key="section" class="mb-4">
         <div class="text-xs text-slate-500 uppercase tracking-wide mb-2">[{{ section }}]</div>
-        <div v-for="(val, key) in kv" :key="key" class="flex items-center gap-2 mb-1.5">
-          <span class="font-mono text-xs text-slate-400 w-48 shrink-0">{{ key }}</span>
-          <input class="input flex-1 text-xs font-mono" :value="val" @input="updateConf(section as string, key as string, ($event.target as HTMLInputElement).value)" />
+        <div v-for="(val, key) in kv" :key="key" class="flex flex-col sm:flex-row sm:items-center gap-2 mb-3">
+          <span class="font-mono text-xs text-slate-400 sm:w-48 sm:shrink-0 font-semibold">{{ key }}</span>
+          <input class="input flex-1 text-xs font-mono w-full" :value="val" @input="updateConf(section as string, key as string, ($event.target as HTMLInputElement).value)" />
         </div>
       </div>
     </div>
 
     <!-- .env -->
     <div class="card">
-      <div class="flex items-center justify-between mb-3">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
         <h3 class="text-sm font-semibold text-slate-300">.env</h3>
-        <button class="btn btn-primary btn-sm" @click="saveEnv">Save</button>
+        <button class="btn btn-primary btn-sm w-full sm:w-auto" @click="saveEnv">Save</button>
       </div>
-      <div v-for="(val, key) in env" :key="key" class="flex items-center gap-2 mb-1.5">
-        <span class="font-mono text-xs text-slate-400 w-48 shrink-0">{{ key }}</span>
-        <input class="input flex-1 text-xs font-mono" :value="val" @input="updateEnv(key as string, ($event.target as HTMLInputElement).value)" />
+      <div v-for="(val, key) in env" :key="key" class="flex flex-col sm:flex-row sm:items-center gap-2 mb-3">
+        <span class="font-mono text-xs text-slate-400 sm:w-48 sm:shrink-0 font-semibold">{{ key }}</span>
+        <input class="input flex-1 text-xs font-mono w-full" :value="val" @input="updateEnv(key as string, ($event.target as HTMLInputElement).value)" />
       </div>
       <div v-if="!Object.keys(env).length" class="text-sm text-slate-500">No .env file found.</div>
     </div>
@@ -32,18 +32,20 @@
     <!-- Cron -->
     <div class="card">
       <h3 class="text-sm font-semibold text-slate-300 mb-3">Auto-Deploy Cron</h3>
-      <div class="flex items-center gap-4 mb-3">
+      <div class="flex flex-col gap-3 mb-3">
         <label class="flex items-center gap-2 text-sm cursor-pointer">
           <input type="checkbox" v-model="cron.enabled" class="accent-indigo-500" />
           <span class="text-slate-300">Enabled</span>
         </label>
-        <input v-model="cron.schedule" class="input font-mono text-xs w-40" placeholder="0 * * * *" />
-        <span class="text-xs text-slate-500">{{ cronHumanReadable }}</span>
+        <div class="flex flex-col sm:flex-row gap-3">
+          <input v-model="cron.schedule" class="input font-mono text-xs sm:w-40" placeholder="0 * * * *" />
+          <span class="text-xs text-slate-500 self-center">{{ cronHumanReadable }}</span>
+        </div>
       </div>
-      <div v-if="cron.last_run" class="text-xs text-slate-500">
+      <div v-if="cron.last_run" class="text-xs text-slate-500 mb-3">
         Last run: {{ new Date(cron.last_run).toLocaleString() }} — {{ cron.last_result || 'unknown' }}
       </div>
-      <button class="btn btn-primary btn-sm mt-3" @click="saveCron">Save Cron</button>
+      <button class="btn btn-primary btn-sm w-full sm:w-auto" @click="saveCron">Save Cron</button>
     </div>
   </div>
 </template>

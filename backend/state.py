@@ -5,6 +5,7 @@ deploy_queues: dict[str, queue.Queue] = {}
 branch_switch_queues: dict[str, queue.Queue] = {}
 submodule_queues: dict[str, queue.Queue] = {}
 pull_queues: dict[str, queue.Queue] = {}
+onboard_queues: dict[str, queue.Queue] = {}
 
 _deploy_locks: dict[str, threading.Lock] = {}
 _locks_lock = threading.Lock()

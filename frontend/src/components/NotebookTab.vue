@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-3">
     <!-- Kernel control bar -->
-    <div class="card flex items-center gap-3 flex-wrap">
+    <div class="card flex flex-col sm:flex-row sm:items-center gap-3">
       <div class="flex items-center gap-2">
         <span class="w-2 h-2 rounded-full transition-colors"
           :class="kernelStatus.running ? 'bg-green-400' : 'bg-slate-600'" />
@@ -14,23 +14,25 @@
       </div>
 
       <template v-if="!kernelStatus.running">
-        <select v-model="selectedDb" class="input text-sm">
+        <select v-model="selectedDb" class="input text-sm flex-1 sm:flex-none">
           <option value="">Select database…</option>
           <option v-for="db in databases" :key="db" :value="db">{{ db }}</option>
         </select>
-        <button class="btn btn-primary btn-sm" :disabled="!selectedDb || connecting" @click="startKernel">
+        <button class="btn btn-primary btn-sm w-full sm:w-auto" :disabled="!selectedDb || connecting" @click="startKernel">
           {{ connecting ? '⟳ Starting…' : '▶ Start Odoo Shell' }}
         </button>
       </template>
       <template v-else>
-        <span class="text-xs text-slate-500 font-mono">
+        <span class="text-xs text-slate-500 font-mono hidden md:block flex-1">
           env, self, env['model.name'].search([]) available
         </span>
-        <button class="btn btn-warning btn-sm" :disabled="!anyRunning" @click="interruptKernel">⏸ Interrupt</button>
-        <button class="btn btn-danger btn-sm" @click="stopKernel">⏹ Stop</button>
+        <div class="flex gap-2 w-full sm:w-auto">
+          <button class="btn btn-warning btn-sm flex-1 sm:flex-none" :disabled="!anyRunning" @click="interruptKernel">⏸ Interrupt</button>
+          <button class="btn btn-danger btn-sm flex-1 sm:flex-none" @click="stopKernel">⏹ Stop</button>
+        </div>
       </template>
 
-      <button class="btn btn-ghost btn-sm ml-auto" @click="addCell">+ Cell</button>
+      <button class="btn btn-ghost btn-sm w-full sm:w-auto sm:ml-auto" @click="addCell">+ Cell</button>
     </div>
 
     <!-- Kernel progress messages -->
@@ -50,14 +52,15 @@
       <!-- Cell header -->
       <div class="flex items-center justify-between px-3 py-1.5 bg-[#0f1117]/60 border-b border-[#2d3148]">
         <span class="text-xs text-slate-500 font-mono select-none">In [{{ idx + 1 }}]</span>
-        <div class="flex gap-1.5">
-          <button class="btn btn-primary btn-sm py-0.5 px-2"
+        <div class="flex gap-1">
+          <button class="btn btn-primary btn-sm py-0.5 px-2 text-xs"
             :disabled="!kernelStatus.running || cell.status === 'running'"
             @click="runCell(cell)">
-            {{ cell.status === 'running' ? '⟳' : '▶' }} Run
-            <kbd class="ml-1 text-[10px] opacity-60">⌃↵</kbd>
+            {{ cell.status === 'running' ? '⟳' : '▶' }}
+            <span class="hidden sm:inline ml-1">Run</span>
+            <kbd class="ml-1 text-[10px] opacity-60 hidden md:inline">⌃↵</kbd>
           </button>
-          <button class="btn btn-ghost btn-sm py-0.5 px-2" @click="clearOutput(cell)">Clear</button>
+          <button class="btn btn-ghost btn-sm py-0.5 px-2 text-xs hidden sm:inline-block" @click="clearOutput(cell)">Clear</button>
           <button class="btn btn-ghost btn-sm py-0.5 px-2 text-slate-600 hover:text-red-400" @click="removeCell(cell.id)">✕</button>
         </div>
       </div>

@@ -8,6 +8,8 @@ const router = createRouter({
     { path: '/', component: DashboardView },
     { path: '/project/:name', component: ProjectDetailView },
     { path: '/health', component: () => import('@/views/HealthView.vue') },
+    { path: '/onboard', component: () => import('@/views/OnboardView.vue') },
+    { path: '/help', component: () => import('@/views/HelpView.vue') },
   ]
 })
 
