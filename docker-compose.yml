@@ -1,21 +1,64 @@
 services:
-  dashboard:
-    image: python:3.11-slim
-    container_name: odoo-dashboard
-    working_dir: /app
-    env_file: .env
-    volumes:
-      - ./app.py:/app/app.py:ro
-      - ./config.py:/app/config.py:ro
-      - ./requirements.txt:/app/requirements.txt:ro
-      - ./templates:/app/templates:ro
-      - ./static:/app/static:ro
-      - /home/parallels/odoo-dev/projects:/home/parallels/odoo-dev/projects:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    ports:
-      - "8891:8891"
-    command: >
-      bash -c "apt-get update -qq && apt-get install -y -qq docker.io
-      && pip install -r requirements.txt --quiet
-      && python app.py"
+  redis:
+    image: redis:7-alpine
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      DJANGO_SETTINGS_MODULE: core.settings
+      REGISTRY_FILE: ${REGISTRY_FILE:-/srv/odoo-dev/projects/.port-registry}
+      ODOO_DEV_BASE: ${ODOO_DEV_BASE:-/srv/odoo-dev}
+      BASE_DOMAIN: ${BASE_DOMAIN:-example.com}
+      LOGS_URL: ${LOGS_URL:-}
+      FILES_URL: ${FILES_URL:-}
+      TERMINAL_URL: ${TERMINAL_URL:-}
+      DASHBOARD_TITLE: ${DASHBOARD_TITLE:-Odoo Dev Dashboard}
+      DB_USER: ${DB_USER:?DB_USER is required - set it in .env}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required - set it in .env}
+      DB_HOST: ${DB_HOST:-host.docker.internal}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      DATA_DIR: /app/data
+      REDIS_HOST: redis
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required - set it in .env}
+    volumes:
+      - ${ODOO_DEV_BASE:-/srv/odoo-dev}:${ODOO_DEV_BASE:-/srv/odoo-dev}:rw
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - dashboard-data:/app/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    expose:
+      - "8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "80"
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - frontend
+    ports:
+      - "${PORT:-8892}:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+
+volumes:
+  dashboard-data:
