@@ -157,11 +157,4 @@ DB_USER=odoo
 DB_PASSWORD=odoo
 ```
 
-## Pending Work
 
-### Jupyter Kernel Rework (next task)
-See `dashboard.plan.md` — replace custom stdin/stdout kernel with real `jupyter_client` + `ipykernel`.
-Three files to rewrite:
-1. `backend/apps/notebooks/kernel_manager.py` — full rewrite (code in plan)
-2. `backend/apps/notebooks/consumers.py` — full rewrite (code in plan)
-3. `frontend/src/components/NotebookTab.vue` — add HTML/image output, Interrupt button, status_message
