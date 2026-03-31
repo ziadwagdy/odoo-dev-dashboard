@@ -66,8 +66,76 @@
             </svg>
             Open
           </a>
+          <button class="btn btn-danger min-h-[44px]" @click="showDeleteModal = true">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+            </svg>
+            Delete
+          </button>
         </div>
       </div>
+
+      <!-- Delete confirmation modal -->
+      <Teleport to="body">
+        <div v-if="showDeleteModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="closeDeleteModal" />
+          <div class="relative bg-[#12151f] border border-red-500/30 rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
+            <!-- Header -->
+            <div class="flex items-start gap-3">
+              <div class="w-10 h-10 rounded-full bg-red-500/15 border border-red-500/30 flex items-center justify-center shrink-0">
+                <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                </svg>
+              </div>
+              <div>
+                <h2 class="text-lg font-bold text-white">Delete project</h2>
+                <p class="text-sm text-slate-400 mt-0.5">This action is permanent and cannot be undone.</p>
+              </div>
+            </div>
+
+            <!-- What will be deleted -->
+            <div class="bg-red-950/30 border border-red-500/20 rounded-lg p-3 space-y-1 text-xs text-red-300/80">
+              <div class="flex items-center gap-2"><span class="text-red-400">✕</span> Docker containers stopped and removed</div>
+              <div class="flex items-center gap-2"><span class="text-red-400">✕</span> All volumes deleted (databases + filestore)</div>
+              <div class="flex items-center gap-2"><span class="text-red-400">✕</span> Project directory removed from disk</div>
+              <div class="flex items-center gap-2"><span class="text-red-400">✕</span> Removed from port registry</div>
+            </div>
+
+            <!-- Confirmation input -->
+            <div>
+              <label class="block text-sm text-slate-300 mb-1.5">
+                Type <code class="bg-slate-800 text-red-300 px-1.5 py-0.5 rounded text-xs">{{ name }}</code> to confirm
+              </label>
+              <input
+                v-model="deleteConfirmText"
+                class="input w-full"
+                :class="{ 'border-red-500/60': deleteConfirmText && deleteConfirmText !== name }"
+                placeholder="project name"
+                @keyup.enter="confirmDelete"
+                autofocus
+              />
+            </div>
+
+            <!-- Actions -->
+            <div class="flex gap-3 justify-end">
+              <button class="btn btn-ghost" @click="closeDeleteModal" :disabled="deleting">Cancel</button>
+              <button
+                class="btn btn-danger inline-flex items-center gap-2"
+                :disabled="deleteConfirmText !== name || deleting"
+                @click="confirmDelete">
+                <svg v-if="deleting" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                </svg>
+                <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+                {{ deleting ? 'Deleting…' : 'Delete project' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Teleport>
 
       <!-- Deploy panel -->
       <DeployPanel :project-name="name" ref="deployPanel" />
@@ -138,6 +206,39 @@
             </table>
           </div>
         </div>
+        <!-- Audit log -->
+        <div class="card mb-4 min-w-0">
+          <h3 class="text-sm font-semibold mb-3 text-slate-300">Audit Log</h3>
+          <div v-if="auditLog.length === 0" class="text-sm text-slate-500">No audit events yet.</div>
+          <div v-else class="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+            <table class="table-base min-w-[480px]">
+              <thead><tr><th>Time</th><th>Action</th><th>Detail</th><th>Outcome</th></tr></thead>
+              <tbody>
+                <tr v-for="a in auditLog as AuditEntry[]" :key="a.id">
+                  <td class="text-slate-400 text-xs whitespace-nowrap">{{ new Date(a.triggered_at).toLocaleString() }}</td>
+                  <td>
+                    <span class="px-2 py-0.5 rounded text-xs font-mono"
+                      :class="{
+                        'bg-blue-500/15 text-blue-300': a.action === 'deploy',
+                        'bg-amber-500/15 text-amber-300': a.action === 'backup',
+                        'bg-purple-500/15 text-purple-300': a.action === 'restore',
+                        'bg-red-500/15 text-red-300': a.action === 'db_drop',
+                        'bg-cyan-500/15 text-cyan-300': a.action === 'branch_switch',
+                        'bg-slate-500/15 text-slate-300': !['deploy','backup','restore','db_drop','branch_switch'].includes(a.action),
+                      }">{{ a.action }}</span>
+                  </td>
+                  <td class="text-slate-400 text-xs max-w-[160px] truncate" :title="a.detail">{{ a.detail || '—' }}</td>
+                  <td>
+                    <span :class="a.outcome === 'success' ? 'text-green-400' : 'text-red-400'" class="text-xs">
+                      {{ a.outcome === 'success' ? '✓' : '✗' }} {{ a.outcome }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <!-- Deploy history -->
         <div class="card min-w-0">
           <h3 class="text-sm font-semibold mb-3 text-slate-300">Deploy History</h3>
@@ -164,7 +265,7 @@
         </div>
       </div>
 
-      <LogViewer v-show="activeTab === 'logs'" :container="project.container as string" :active="activeTab === 'logs'" />
+      <LogViewer v-show="activeTab === 'logs'" :container="project.container as string" :container-id="(project.container_id as string) || ''" :logs-url="config.logsUrl" :active="activeTab === 'logs'" />
       <DatabaseTab v-show="activeTab === 'database'" :project-name="name" :active="activeTab === 'database'" />
       <ModulesTab v-show="activeTab === 'modules'" :project-name="name" :active="activeTab === 'modules'" />
       <BranchTab v-show="activeTab === 'branches'" :project-name="name" :folder="(project.folder as string | null)" :container="(project.container as string)" :active="activeTab === 'branches'" />
@@ -176,7 +277,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRoute, RouterLink } from 'vue-router'
+import { useRoute, useRouter, RouterLink } from 'vue-router'
+import { useProjectsStore } from '@/stores/projects'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useConfigStore } from '@/stores/config'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -202,15 +304,50 @@ interface DeployRecord {
   duration_seconds: number | null
 }
 
-const route = useRoute()
-const notify = useNotificationsStore()
-const config = useConfigStore()
+interface AuditEntry {
+  id: number
+  triggered_at: string
+  action: string
+  detail: string
+  outcome: string
+}
 
-const name = route.params.name as string
+const route    = useRoute()
+const router   = useRouter()
+const notify   = useNotificationsStore()
+const config   = useConfigStore()
+const projects = useProjectsStore()
+
+const name    = route.params.name as string
 const project = ref<Record<string, unknown> | null>(null)
 const history = ref<unknown[]>([])
-const activeTab = ref('overview')
+const auditLog = ref<unknown[]>([])
+const activeTab   = ref('overview')
 const deployPanel = ref<InstanceType<typeof DeployPanel> | null>(null)
+
+const showDeleteModal   = ref(false)
+const deleteConfirmText = ref('')
+const deleting          = ref(false)
+
+function closeDeleteModal() {
+  showDeleteModal.value   = false
+  deleteConfirmText.value = ''
+}
+
+async function confirmDelete() {
+  if (deleteConfirmText.value !== name || deleting.value) return
+  deleting.value = true
+  const res = await fetch(`/api/project/${name}/delete`, { method: 'DELETE' })
+  const d   = await res.json()
+  deleting.value = false
+  if (!d.ok) {
+    notify.add('error', d.error || 'Delete failed')
+    return
+  }
+  notify.add('success', `Project "${name}" deleted`)
+  await projects.fetchProjects()
+  router.push('/')
+}
 
 const tabs = [
   { id: 'overview', label: 'Overview' },
@@ -223,12 +360,14 @@ const tabs = [
 ]
 
 onMounted(async () => {
-  const [projRes, histRes] = await Promise.all([
+  const [projRes, histRes, auditRes] = await Promise.all([
     fetch(`/api/project/${name}`),
     fetch(`/api/project/${name}/history`),
+    fetch(`/api/project/${name}/audit`),
   ])
   project.value = await projRes.json()
   history.value = await histRes.json()
+  auditLog.value = await auditRes.json()
 })
 
 async function restart() {

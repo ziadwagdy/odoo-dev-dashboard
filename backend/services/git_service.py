@@ -1,4 +1,3 @@
-import configparser
 import os
 import subprocess
 from django.conf import settings
@@ -75,23 +74,120 @@ def get_current_commit(folder):
         return None
 
 
-def get_addons_path(project_name):
+def _find_compose_path_for_project(odoo_dev_base, folder=None, version=None):
+    """Locate docker-compose.yml for a project (same logic as db_service._find_compose_path)."""
+    if folder:
+        candidate = os.path.join(odoo_dev_base, folder)
+        while candidate and candidate != odoo_dev_base and candidate != '/':
+            compose = os.path.join(candidate, 'docker-compose.yml')
+            if os.path.exists(compose):
+                return compose
+            candidate = os.path.dirname(candidate)
+    if version:
+        versioned = os.path.join(odoo_dev_base, f'v{version}', 'docker-compose.yml')
+        if os.path.exists(versioned):
+            return versioned
+    return None
+
+
+def _build_host_to_container_map(compose_path):
+    """
+    Parse a docker-compose.yml and return a dict mapping host paths to container
+    paths for all /mnt/* volume mounts.  Expands $HOME / ${HOME}.
+    """
+    if not compose_path or not os.path.exists(compose_path):
+        return {}
+    import re as _re
+    host_home = os.path.dirname(settings.ODOO_DEV_BASE)
+    with open(compose_path) as fh:
+        content = fh.read()
+    content = content.replace('${HOME}', host_home).replace('$HOME', host_home)
+    content = content.replace('${ODOO_DEV_BASE}', settings.ODOO_DEV_BASE)
+    result = {}
+    for m in _re.finditer(r'^\s*-\s+([^:]+):(/mnt/[^:\s]+)', content, _re.MULTILINE):
+        host = m.group(1).strip()
+        container = m.group(2).strip()
+        result[host] = container
+    return result
+
+
+def get_addons_path(project_name, folder=None, version=None):
+    """
+    Auto-detect addon paths by scanning the project directory for __manifest__.py files.
+    Uses the same logic as entrypoint-wrapper.sh: every unique parent directory that
+    contains at least one Odoo module becomes an addons_path entry.
+
+    folder:  registry folder field (e.g. 'projects/medtech' or 'projects/pac/repo'
+             or 'worktrees/hr-base-17')
+    version: odoo version string (e.g. '17') used to locate the docker-compose.yml
+             when the folder is inside a worktree rather than a project directory.
+    """
     base = settings.ODOO_DEV_BASE
-    conf_path = os.path.join(base, project_name, 'config', 'odoo.conf')
-    if not os.path.exists(conf_path):
+    addons_dir = os.path.join(base, folder) if folder else os.path.join(base, 'projects', project_name)
+
+    if not os.path.isdir(addons_dir):
         return []
-    cp = configparser.ConfigParser()
-    cp.read(conf_path)
-    raw = cp.get('options', 'addons_path', fallback='')
-    if not raw:
+
+    # Try to find the docker-compose.yml so we can map host paths → container paths
+    compose_path = _find_compose_path_for_project(base, folder=folder, version=version)
+    host_to_container = _build_host_to_container_map(compose_path)
+
+    def _host_to_container_path(host_path):
+        """Reverse-map a host path to its container /mnt/... path."""
+        if host_path in host_to_container:
+            return host_to_container[host_path]
+        for h, c in host_to_container.items():
+            if host_path.startswith(h + '/'):
+                return c + host_path[len(h):]
+        return None
+
+    # Determine which host directories to scan.
+    # When a compose file is available, scan ALL non-enterprise /mnt/* source dirs
+    # (covers cases like odoo17 where hr-base and project addons are separate mounts).
+    # Fall back to just the registry folder when no compose is found.
+    _SKIP_CONTAINERS = {'/mnt/enterprise-addons'}
+    _SKIP_DIRS = {'.git', '__pycache__', '.idea', 'node_modules', 'static'}
+
+    if host_to_container:
+        scan_dirs = [
+            h for h, c in host_to_container.items()
+            if c not in _SKIP_CONTAINERS and os.path.isdir(h)
+        ]
+    else:
+        scan_dirs = [addons_dir]
+
+    # Walk each source dir, collect every parent dir that contains __manifest__.py
+    parent_dirs = set()
+    for scan_root in scan_dirs:
+        for root, dirs, files in os.walk(scan_root):
+            dirs[:] = [d for d in dirs if d not in _SKIP_DIRS and not d.startswith('.')]
+            if '__manifest__.py' in files:
+                parent_dirs.add(os.path.dirname(root))
+
+    if not parent_dirs:
         return []
-    entries = []
-    for p in raw.split(','):
-        p = p.strip()
-        if not p:
-            continue
-        kind, label = _classify_path(p)
-        entries.append({'path': p, 'label': label, 'kind': kind})
+
+    # Build entries: fixed headers first, then sorted project paths
+    entries = [
+        {'path': '/usr/lib/python3/dist-packages/odoo/addons', 'label': 'Odoo Core',   'kind': 'core'},
+        {'path': '/mnt/enterprise-addons',                      'label': 'Enterprise',  'kind': 'enterprise'},
+    ]
+
+    # Sort: scan_dir roots first (by container path), then subdirs alphabetically
+    scan_dirs_set = set(scan_dirs)
+    for host_path in sorted(parent_dirs, key=lambda p: (p not in scan_dirs_set, p)):
+        # Try compose-based reverse mapping first
+        container_path = _host_to_container_path(host_path)
+        if not container_path:
+            # Fall back to /mnt/project-addons convention
+            if host_path == addons_dir:
+                container_path = '/mnt/project-addons'
+            else:
+                rel = os.path.relpath(host_path, addons_dir)
+                container_path = f'/mnt/project-addons/{rel}'
+        kind, label = _classify_path(container_path)
+        entries.append({'path': container_path, 'label': label, 'kind': kind})
+
     return entries
 
 
@@ -99,13 +195,27 @@ def _classify_path(p):
     lp = p.lower()
     if 'enterprise' in lp:
         return 'enterprise', 'Enterprise'
-    if 'extra' in lp and 'addons' in lp:
-        return 'extra', 'Extra Addons'
     if lp.startswith('/usr/') or 'dist-packages' in lp or 'site-packages' in lp:
         return 'core', 'Odoo Core'
+    # /mnt/extra-addons (root) → HR Base
+    if p == '/mnt/extra-addons' or p.endswith('/extra-addons'):
+        return 'extra', 'HR Base'
+    # /mnt/extra-addons/<sub> → HR Base / <sub>
+    if p.startswith('/mnt/extra-addons/'):
+        sub = p[len('/mnt/extra-addons/'):].split('/')[0]
+        return 'extra', f'HR Base / {sub}'
+    # /mnt/hr-base-addons (root) → HR Base
+    if p == '/mnt/hr-base-addons' or p.endswith('/hr-base-addons'):
+        return 'extra', 'HR Base'
+    # /mnt/hr-base-addons/<sub> → HR Base / <sub>
+    if p.startswith('/mnt/hr-base-addons/'):
+        sub = p[len('/mnt/hr-base-addons/'):].split('/')[0]
+        return 'extra', f'HR Base / {sub}'
+    if 'extra' in lp and 'addons' in lp:
+        return 'extra', 'Extra Addons'
     if p == '/mnt/project-addons' or p.endswith('/project-addons'):
         return 'project', 'Project Root'
-    if '/project-addons/' in p or '/mnt/project-addons/' in p:
+    if '/project-addons/' in p:
         sub = p.rsplit('/', 1)[-1]
         return 'project-sub', f'Project / {sub}'
     label = p.rsplit('/', 1)[-1] or p

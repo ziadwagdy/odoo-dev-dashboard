@@ -144,7 +144,7 @@ async def stream_stats(request, container_name):
 
 async def stream_module_update(request, project, dbname, module_name):
     container_name = f'{project}-app'
-    cmd = f'odoo -d {dbname} -u {module_name} --stop-after-init'
+    cmd = f'odoo -c /tmp/odoo-runtime.conf -d {dbname} -u {module_name} --stop-after-init'
 
     async def generate():
         loop = asyncio.get_running_loop()

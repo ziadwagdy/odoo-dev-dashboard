@@ -21,10 +21,10 @@ def get_scheduler() -> BackgroundScheduler:
 
 
 def setup_cron_jobs():
-    """Load all enabled CronJobs from DB and schedule them.
+    """Load all enabled CronJobs and BackupSchedules from DB and schedule them.
     Also auto-creates enabled CronJobs for any registered project that doesn't have one yet."""
     try:
-        from apps.projects.models import CronJob
+        from apps.projects.models import CronJob, BackupSchedule
         from services.registry import read_registry
         DEFAULT_SCHEDULE = '*/2 * * * *'
         # Auto-create for any new projects not yet in the DB
@@ -32,22 +32,52 @@ def setup_cron_jobs():
         existing = set(CronJob.objects.values_list('project', flat=True))
         for name in registered - existing:
             CronJob.objects.create(project=name, schedule=DEFAULT_SCHEDULE, enabled=True)
-        # Schedule all enabled jobs
-        jobs = CronJob.objects.filter(enabled=True)
+        # Schedule all enabled deploy jobs
         scheduler = get_scheduler()
-        for job in jobs:
+        for job in CronJob.objects.filter(enabled=True):
             _add_job(scheduler, job)
+        # Schedule all enabled backup jobs
+        for bsched in BackupSchedule.objects.filter(enabled=True):
+            _add_backup_job(scheduler, bsched)
     except Exception as e:
         logger.error(f'Failed to setup cron jobs: {e}')
 
 
 def reschedule_job(job):
-    """Add or update a single job."""
+    """Add or update a single deploy cron job."""
     scheduler = get_scheduler()
     if scheduler.get_job(job.project):
         scheduler.remove_job(job.project)
     if job.enabled:
         _add_job(scheduler, job)
+
+
+def reschedule_backup_job(bsched):
+    """Add or update a single backup schedule job."""
+    scheduler = get_scheduler()
+    job_id = f'backup__{bsched.project}__{bsched.dbname}'
+    if scheduler.get_job(job_id):
+        scheduler.remove_job(job_id)
+    if bsched.enabled:
+        _add_backup_job(scheduler, bsched)
+
+
+def _add_backup_job(scheduler, bsched):
+    parts = bsched.schedule.split()
+    if len(parts) != 5:
+        return
+    minute, hour, day, month, day_of_week = parts
+    job_id = f'backup__{bsched.project}__{bsched.dbname}'
+    try:
+        scheduler.add_job(
+            _run_scheduled_backup,
+            CronTrigger(minute=minute, hour=hour, day=day, month=month, day_of_week=day_of_week),
+            id=job_id,
+            args=[bsched.project, bsched.dbname],
+            replace_existing=True,
+        )
+    except Exception as e:
+        logger.error(f'Failed to schedule backup job {job_id}: {e}')
 
 
 def _add_job(scheduler, job):
@@ -121,6 +151,64 @@ def _update_cron_result(project_name: str, result: str):
         CronJob.objects.filter(project=project_name).update(
             last_run=datetime.now(timezone.utc),
             last_result=result,
+        )
+    except Exception:
+        pass
+
+
+def _run_scheduled_backup(project_name: str, dbname: str):
+    """Called by scheduler: back up dbname for project and prune old backups."""
+    import os
+    from django.conf import settings
+    from services.registry import get_project
+    from services.db_service import backup_database, list_backup_files
+    from apps.projects.models import BackupSchedule, AuditLog
+
+    p = get_project(project_name)
+    if not p:
+        return
+
+    backup_dir = os.path.join(settings.DATA_DIR, 'backups', project_name)
+    result = 'failed'
+    try:
+        backup_database(p['db_port'], dbname, backup_dir)
+        result = 'success'
+
+        # Prune oldest backups beyond retention count
+        try:
+            schedule = BackupSchedule.objects.get(project=project_name, dbname=dbname)
+            retention = schedule.retention
+            # list_backup_files returns newest-first; filter by dbname prefix
+            all_files = list_backup_files(project_name, backup_dir)
+            db_files = [f for f in all_files if f['filename'].startswith(f'{dbname}-')]
+            for old in db_files[retention:]:
+                old_path = os.path.join(backup_dir, old['filename'])
+                try:
+                    os.remove(old_path)
+                except OSError:
+                    pass
+        except BackupSchedule.DoesNotExist:
+            pass
+
+    except Exception as e:
+        logger.error(f'Scheduled backup failed {project_name}/{dbname}: {e}')
+
+    # Update last_run + last_result
+    try:
+        BackupSchedule.objects.filter(project=project_name, dbname=dbname).update(
+            last_run=datetime.now(timezone.utc),
+            last_result=result,
+        )
+    except Exception:
+        pass
+
+    # Write audit log
+    try:
+        AuditLog.objects.create(
+            project=project_name,
+            action='backup',
+            detail=f'{dbname} (scheduled)',
+            outcome=result,
         )
     except Exception:
         pass

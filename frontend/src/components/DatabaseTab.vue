@@ -117,6 +117,54 @@
       </template>
     </div>
 
+    <!-- Backup Schedules -->
+    <div class="card mb-4">
+      <h3 class="text-sm font-semibold text-slate-300 mb-3">Backup Schedules</h3>
+      <div v-if="!dbs.length" class="text-sm text-slate-500">Load databases first.</div>
+      <div v-else class="space-y-3">
+        <div v-for="db in dbs" :key="'sched-' + db.name" class="border border-border/50 rounded-xl p-4 bg-surface/20">
+          <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+            <span class="font-mono text-sm text-white shrink-0">{{ db.name }}</span>
+            <div class="flex flex-wrap items-center gap-2 flex-1">
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" class="sr-only peer"
+                  :checked="schedules[db.name]?.enabled ?? false"
+                  @change="toggleSchedule(db.name, ($event.target as HTMLInputElement).checked)" />
+                <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-accent"></div>
+              </label>
+              <input
+                v-if="schedules[db.name]?.enabled"
+                type="text"
+                class="input input-sm font-mono w-36 text-xs"
+                placeholder="0 2 * * *"
+                :value="schedules[db.name]?.schedule ?? '0 2 * * *'"
+                @change="updateScheduleField(db.name, 'schedule', ($event.target as HTMLInputElement).value)"
+              />
+              <span v-if="schedules[db.name]?.enabled" class="text-xs text-slate-400">keep last</span>
+              <input
+                v-if="schedules[db.name]?.enabled"
+                type="number"
+                class="input input-sm w-16 text-xs"
+                min="1" max="99"
+                :value="schedules[db.name]?.retention ?? 7"
+                @change="updateScheduleField(db.name, 'retention', Number(($event.target as HTMLInputElement).value))"
+              />
+              <button
+                v-if="schedules[db.name]"
+                class="btn btn-primary btn-sm text-xs"
+                @click="saveSchedule(db.name)">Save</button>
+            </div>
+          </div>
+          <div v-if="schedules[db.name]?.last_run" class="mt-2 text-xs text-slate-500">
+            Last run: {{ new Date(schedules[db.name].last_run!).toLocaleString() }}
+            <span :class="schedules[db.name].last_result === 'success' ? 'text-green-400' : 'text-red-400'">
+              · {{ schedules[db.name].last_result }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal -->
     <div v-if="modal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" @click.self="modal = null">
       <div class="bg-[#1a1d27] border border-[#2d3148] rounded-xl p-6 w-[calc(100vw-2rem)] max-w-md">
@@ -141,15 +189,21 @@ const notify = useNotificationsStore()
 
 interface DB { name: string; size: string; size_bytes: number }
 interface Backup { filename: string; size: string; modified: string }
+interface Schedule {
+  enabled: boolean; schedule: string; retention: number;
+  last_run: string | null; last_result: string | null
+}
 
 const dbs = ref<DB[]>([])
 const backups = ref<Backup[]>([])
+const schedules = ref<Record<string, Schedule>>({})
 const loading = ref(false)
 const error = ref('')
 const modal = ref<{ title: string; body: string; placeholder?: string; confirm: () => void } | null>(null)
 const modalInput = ref('')
 
-watch(() => props.active, (v) => { if (v) { loadDbs(); loadBackups() } })
+const loaded = ref(false)
+watch(() => props.active, (v) => { if (v && !loaded.value) { loadDbs(); loadBackups() } })
 
 async function loadDbs() {
   loading.value = true; error.value = ''
@@ -158,6 +212,49 @@ async function loadDbs() {
   loading.value = false
   if (data.error) { error.value = data.error; return }
   dbs.value = data.databases
+  loaded.value = true
+  loadAllSchedules()
+}
+
+async function loadAllSchedules() {
+  for (const db of dbs.value) {
+    const res = await fetch(`/api/db/${props.projectName}/backup-schedule/${db.name}`)
+    const data = await res.json()
+    schedules.value[db.name] = {
+      enabled: data.enabled, schedule: data.schedule,
+      retention: data.retention, last_run: data.last_run, last_result: data.last_result,
+    }
+  }
+}
+
+function toggleSchedule(dbname: string, enabled: boolean) {
+  if (!schedules.value[dbname]) {
+    schedules.value[dbname] = { enabled, schedule: '0 2 * * *', retention: 7, last_run: null, last_result: null }
+  } else {
+    schedules.value[dbname].enabled = enabled
+  }
+}
+
+function updateScheduleField(dbname: string, field: 'schedule' | 'retention', value: string | number) {
+  if (!schedules.value[dbname]) return
+  if (field === 'schedule') schedules.value[dbname].schedule = value as string
+  else schedules.value[dbname].retention = value as number
+}
+
+async function saveSchedule(dbname: string) {
+  const s = schedules.value[dbname]
+  if (!s) return
+  const res = await fetch(`/api/db/${props.projectName}/backup-schedule/${dbname}/save`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled: s.enabled, schedule: s.schedule, retention: s.retention }),
+  })
+  const data = await res.json()
+  if (data.enabled !== undefined) {
+    schedules.value[dbname] = { enabled: data.enabled, schedule: data.schedule, retention: data.retention, last_run: data.last_run, last_result: data.last_result }
+    notify.add('success', `Schedule saved for ${dbname}`)
+  } else {
+    notify.add('error', data.error || 'Failed to save schedule')
+  }
 }
 
 async function loadBackups() {

@@ -7,6 +7,14 @@ from rest_framework.response import Response
 from services.registry import get_project
 from services.git_service import list_branches, switch_branch, get_submodule_status, update_submodules, git_pull
 from state import branch_switch_queues, submodule_queues, pull_queues
+from apps.projects.models import AuditLog
+
+
+def _audit(project, action, detail='', outcome='success'):
+    try:
+        AuditLog.objects.create(project=project, action=action, detail=detail, outcome=outcome)
+    except Exception:
+        pass
 
 
 @api_view(['GET'])
@@ -32,6 +40,7 @@ def git_switch(request, project):
 
     def _run():
         switch_branch(p['folder'], branch, q)
+        _audit(project, 'branch_switch', branch)
 
     threading.Thread(target=_run, daemon=True).start()
     return Response({'ok': True, 'stream_url': f'/stream/branch-switch/{project}'})

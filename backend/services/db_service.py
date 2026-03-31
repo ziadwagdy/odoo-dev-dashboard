@@ -177,7 +177,31 @@ def _resolve_host_path(container_path, vol_mappings):
     return None
 
 
-def list_modules_grouped(db_port, dbname, project_name, odoo_dev_base):
+def _find_compose_path(odoo_dev_base, folder=None, version=None):
+    """Locate the docker-compose.yml for a project.
+
+    Search strategy:
+    1. Walk up from {odoo_dev_base}/{folder} looking for docker-compose.yml.
+    2. Try {odoo_dev_base}/v{version}/docker-compose.yml.
+    3. Return None if not found.
+    """
+    if folder:
+        candidate = os.path.join(odoo_dev_base, folder)
+        while candidate and candidate != odoo_dev_base and candidate != '/':
+            compose = os.path.join(candidate, 'docker-compose.yml')
+            if os.path.exists(compose):
+                return compose
+            candidate = os.path.dirname(candidate)
+
+    if version:
+        versioned = os.path.join(odoo_dev_base, f'v{version}', 'docker-compose.yml')
+        if os.path.exists(versioned):
+            return versioned
+
+    return None
+
+
+def list_modules_grouped(db_port, dbname, project_name, odoo_dev_base, folder=None, version=None):
     from .git_service import get_addons_path
     try:
         conn = _connect(db_port, dbname)
@@ -194,9 +218,9 @@ def list_modules_grouped(db_port, dbname, project_name, odoo_dev_base):
         return {'error': str(e)}
 
     all_modules = [{'name': r[0], 'state': r[1], 'version': r[2], 'author': r[3]} for r in rows]
-    addons_entries = get_addons_path(project_name)
-    compose_path = os.path.join(odoo_dev_base, project_name, 'docker-compose.yml')
-    vol_mappings = _parse_volume_mappings(compose_path, odoo_dev_base)
+    addons_entries = get_addons_path(project_name, folder, version=version)
+    compose_path = _find_compose_path(odoo_dev_base, folder=folder, version=version)
+    vol_mappings = _parse_volume_mappings(compose_path, odoo_dev_base) if compose_path else {}
 
     module_to_source = {}
     for entry in addons_entries:

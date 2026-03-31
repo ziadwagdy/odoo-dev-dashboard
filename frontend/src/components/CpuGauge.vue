@@ -35,7 +35,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { useContainerStats } from '@/composables/useContainerStats'
 
 const props = defineProps<{
   container?: string
@@ -43,11 +44,21 @@ const props = defineProps<{
 }>()
 
 const cpuPct = ref<number | null>(null)
-let source: EventSource | null = null
+
+// If a direct value is provided, use it (HealthView mode)
+watch(() => props.value, (v) => {
+  if (v !== undefined) cpuPct.value = v ?? null
+}, { immediate: true })
+
+// Otherwise share the SSE stream via composable
+if (props.value === undefined && props.container) {
+  const { cpu } = useContainerStats(props.container)
+  watch(cpu, (v) => { cpuPct.value = v }, { immediate: true })
+}
 
 const ARC_MAX = 126
-const arcLength = computed(() => cpuPct.value === null ? 0 : (Math.min(cpuPct.value, 100) / 100) * ARC_MAX)
-const cpuText = computed(() => cpuPct.value === null ? '--' : cpuPct.value.toFixed(1) + '%')
+const arcLength   = computed(() => cpuPct.value === null ? 0 : (Math.min(cpuPct.value, 100) / 100) * ARC_MAX)
+const cpuText     = computed(() => cpuPct.value === null ? '--' : cpuPct.value.toFixed(1) + '%')
 
 const gradientStart = computed(() => {
   const v = cpuPct.value ?? 0
@@ -55,27 +66,10 @@ const gradientStart = computed(() => {
   if (v > 60) return '#f59e0b'
   return '#714b67'
 })
-
 const gradientEnd = computed(() => {
   const v = cpuPct.value ?? 0
   if (v > 80) return '#dc2626'
   if (v > 60) return '#d97706'
   return '#a24689'
 })
-
-// If a direct value is provided, use it and skip SSE
-watch(() => props.value, (v) => {
-  if (v !== undefined) cpuPct.value = v ?? null
-}, { immediate: true })
-
-onMounted(() => {
-  if (props.value !== undefined) return  // direct value mode — no SSE
-  if (!props.container) return
-  source = new EventSource(`/stream/stats/${props.container}`)
-  source.onmessage = (evt) => {
-    const d = JSON.parse(evt.data)
-    if (d.cpu_pct !== null && d.cpu_pct !== undefined) cpuPct.value = d.cpu_pct
-  }
-})
-onUnmounted(() => source?.close())
 </script>

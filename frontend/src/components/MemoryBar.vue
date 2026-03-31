@@ -15,7 +15,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { useContainerStats } from '@/composables/useContainerStats'
 
 const props = defineProps<{
   container?: string
@@ -23,9 +24,23 @@ const props = defineProps<{
   memLimitMb?: number | null
 }>()
 
-const memUsed = ref<number | null>(null)
+const memUsed  = ref<number | null>(null)
 const memLimit = ref<number | null>(null)
-let source: EventSource | null = null
+
+// If direct values are provided, use them (HealthView mode)
+watch(() => [props.memUsedMb, props.memLimitMb] as const, ([u, l]) => {
+  if (props.memUsedMb !== undefined || props.memLimitMb !== undefined) {
+    memUsed.value  = u ?? null
+    memLimit.value = l ?? null
+  }
+}, { immediate: true })
+
+// Otherwise share the SSE stream via composable
+if (props.memUsedMb === undefined && props.memLimitMb === undefined && props.container) {
+  const { memUsed: mu, memLimit: ml } = useContainerStats(props.container)
+  watch(mu, (v) => { memUsed.value  = v }, { immediate: true })
+  watch(ml, (v) => { memLimit.value = v }, { immediate: true })
+}
 
 const pct = computed(() => {
   if (!memUsed.value || !memLimit.value) return 0
@@ -35,31 +50,10 @@ const memText = computed(() => {
   if (!memUsed.value || !memLimit.value) return '-- / -- MB'
   return `${memUsed.value.toFixed(0)} / ${memLimit.value.toFixed(0)} MB`
 })
-
 const barColorClass = computed(() => {
   const p = pct.value
   if (p > 90) return 'bg-gradient-to-r from-red-500 to-rose-400'
   if (p > 75) return 'bg-gradient-to-r from-amber-500 to-orange-400'
   return 'bg-gradient-to-r from-primary to-accent'
 })
-
-// If direct values are provided, use them and skip SSE
-watch(() => [props.memUsedMb, props.memLimitMb] as const, ([u, l]) => {
-  if (props.memUsedMb !== undefined || props.memLimitMb !== undefined) {
-    memUsed.value = u ?? null
-    memLimit.value = l ?? null
-  }
-}, { immediate: true })
-
-onMounted(() => {
-  if (props.memUsedMb !== undefined || props.memLimitMb !== undefined) return  // direct value mode
-  if (!props.container) return
-  source = new EventSource(`/stream/stats/${props.container}`)
-  source.onmessage = (evt) => {
-    const d = JSON.parse(evt.data)
-    if (d.mem_used_mb !== null) memUsed.value = d.mem_used_mb
-    if (d.mem_limit_mb !== null) memLimit.value = d.mem_limit_mb
-  }
-})
-onUnmounted(() => source?.close())
 </script>

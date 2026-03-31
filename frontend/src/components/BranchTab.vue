@@ -189,6 +189,7 @@ interface Submodule { path: string; commit: string; status: string }
 const data = ref<BranchData>({ local: [], remote: [], current: null })
 const submodules = ref<Submodule[]>([])
 const loading = ref(false)
+const loaded = ref(false)
 const switchOutput = ref('')
 const searchQuery = ref('')
 const showConfirmModal = ref(false)
@@ -207,7 +208,7 @@ const filteredRemote = computed(() => {
   return data.value.remote.filter(b => b.toLowerCase().includes(query))
 })
 
-watch(() => props.active, (v) => { if (v) load() }, { immediate: true })
+watch(() => props.active, (v) => { if (v && !loaded.value) load() }, { immediate: true })
 
 async function load() {
   loading.value = true
@@ -219,6 +220,7 @@ async function load() {
   const subData = await subRes.json()
   submodules.value = subData.submodules || []
   loading.value = false
+  loaded.value = true
 }
 
 async function confirmSwitch() {
@@ -242,9 +244,9 @@ async function switchBranch(branch: string) {
     switchOutput.value += msg.line + '\n'
     if (msg.done) {
       source.close()
+      loaded.value = false  // invalidate so next activate or manual refresh re-fetches
       load()
       switchComplete = true
-      // Show restart prompt after successful switch
       showRestartModal.value = true
     }
   }
@@ -272,7 +274,7 @@ async function updateSubmodules() {
   source.onmessage = (evt) => {
     const msg = JSON.parse(evt.data)
     switchOutput.value += msg.line + '\n'
-    if (msg.done) { source.close(); load() }
+    if (msg.done) { source.close(); loaded.value = false; load() }
   }
   source.onerror = () => source.close()
 }
@@ -287,7 +289,8 @@ async function gitPull() {
   source.onmessage = (evt) => {
     const msg = JSON.parse(evt.data)
     switchOutput.value += msg.line + '\n'
-    if (msg.done) { source.close(); load() }
+    // Pull doesn't change current branch — no need to re-fetch branch list
+    if (msg.done) { source.close(); notify.add('success', 'Pull complete') }
   }
   source.onerror = () => source.close()
 }

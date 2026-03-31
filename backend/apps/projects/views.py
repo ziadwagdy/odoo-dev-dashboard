@@ -1,5 +1,7 @@
 import os
 import queue
+import shutil
+import subprocess
 import threading
 import time
 
@@ -14,8 +16,15 @@ from services.git_service import get_git_info, get_commit_log, get_current_commi
 from services.db_service import (list_databases, backup_database, duplicate_database, drop_database,
                                   list_modules_grouped, list_backup_files, restore_database)
 from state import deploy_queues, get_deploy_lock
-from .models import DeployHistory
-from .serializers import DeployHistorySerializer
+from .models import DeployHistory, BackupSchedule, AuditLog
+from .serializers import DeployHistorySerializer, BackupScheduleSerializer, AuditLogSerializer
+
+
+def _audit(project, action, detail='', outcome='success'):
+    try:
+        AuditLog.objects.create(project=project, action=action, detail=detail, outcome=outcome)
+    except Exception:
+        pass
 
 
 @api_view(['GET'])
@@ -90,8 +99,10 @@ def db_backup(request, project, dbname):
     backup_dir = os.path.join(settings.DATA_DIR, 'backups', project)
     try:
         _filepath, filename = backup_database(p['db_port'], dbname, backup_dir)
+        _audit(project, 'backup', dbname)
         return Response({'ok': True, 'filename': filename, 'download_url': f'/api/db/{project}/download/{filename}'})
     except Exception as e:
+        _audit(project, 'backup', dbname, outcome='failed')
         return Response({'ok': False, 'error': str(e)}, status=500)
 
 
@@ -115,8 +126,10 @@ def db_duplicate(request, project, dbname):
         return Response({'error': 'new_name required'}, status=400)
     try:
         duplicate_database(p['db_port'], dbname, new_name)
+        _audit(project, 'db_duplicate', f'{dbname} → {new_name}')
         return Response({'ok': True})
     except Exception as e:
+        _audit(project, 'db_duplicate', f'{dbname} → {new_name}', outcome='failed')
         return Response({'ok': False, 'error': str(e)}, status=500)
 
 
@@ -129,8 +142,10 @@ def db_drop(request, project, dbname):
         return Response({'error': 'send {"confirm": "<dbname>"} to confirm'}, status=400)
     try:
         drop_database(p['db_port'], dbname)
+        _audit(project, 'db_drop', dbname)
         return Response({'ok': True})
     except Exception as e:
+        _audit(project, 'db_drop', dbname, outcome='failed')
         return Response({'ok': False, 'error': str(e)}, status=500)
 
 
@@ -156,8 +171,10 @@ def db_restore(request, project, dbname):
                 return Response({'error': 'backup file not found'}, status=404)
             try:
                 restore_database(p['db_port'], dbname, filepath)
+                _audit(project, 'restore', f'{filename} → {dbname}')
                 return Response({'ok': True})
             except Exception as e:
+                _audit(project, 'restore', f'{filename} → {dbname}', outcome='failed')
                 return Response({'ok': False, 'error': str(e)}, status=500)
         return Response({'error': 'file required'}, status=400)
 
@@ -170,8 +187,10 @@ def db_restore(request, project, dbname):
             f.write(chunk)
     try:
         restore_database(p['db_port'], dbname, filepath)
+        _audit(project, 'restore', f'{uploaded.name} → {dbname}')
         return Response({'ok': True})
     except Exception as e:
+        _audit(project, 'restore', f'{uploaded.name} → {dbname}', outcome='failed')
         return Response({'ok': False, 'error': str(e)}, status=500)
 
 
@@ -180,7 +199,8 @@ def modules_list(request, project, dbname):
     p = get_project(project)
     if not p:
         return Response({'error': 'project not found'}, status=404)
-    result = list_modules_grouped(p['db_port'], dbname, p['name'], settings.ODOO_DEV_BASE)
+    result = list_modules_grouped(p['db_port'], dbname, p['name'], settings.ODOO_DEV_BASE,
+                                   folder=p.get('folder'), version=p.get('version'))
     if isinstance(result, dict) and 'error' in result:
         return Response(result, status=500)
     return Response(result)
@@ -210,23 +230,40 @@ def deploy_project(request, name):
     started_at = time.time()
 
     def _run():
+        outcome = 'success'
         try:
             git_pull(p['folder'], q)
+        except Exception:
+            outcome = 'failed'
         finally:
             new_commit = get_current_commit(p['folder'])
             duration = round(time.time() - started_at, 1)
             _save_history(name, prev_commit, new_commit, duration)
+            _audit(name, 'deploy', f'{(prev_commit or "")[:7]} → {(new_commit or "")[:7]}', outcome=outcome)
             lock.release()
 
     threading.Thread(target=_run, daemon=True).start()
     return Response({'ok': True})
 
 
-def _save_history(project, prev_commit, new_commit, duration):
+@api_view(['POST'])
+def record_deploy(request, name):
+    """Lightweight endpoint for external tools (e.g. auto-deploy.sh) to record a deploy
+    in history without triggering a git pull."""
+    p = get_project(name)
+    if not p:
+        return Response({'error': 'project not found'}, status=404)
+    commit = get_current_commit(p.get('folder'))
+    trigger = request.data.get('trigger', 'auto')
+    _save_history(name, commit, commit, 0, trigger_type=trigger)
+    return Response({'ok': True})
+
+
+def _save_history(project, prev_commit, new_commit, duration, trigger_type='manual'):
     try:
         DeployHistory.objects.create(
             project=project,
-            trigger_type='manual',
+            trigger_type=trigger_type,
             prev_commit=prev_commit,
             new_commit=new_commit,
             outcome='success',
@@ -234,6 +271,40 @@ def _save_history(project, prev_commit, new_commit, duration):
         )
     except Exception:
         pass
+
+
+@api_view(['GET'])
+def backup_schedule_get(request, project, dbname):
+    try:
+        sched = BackupSchedule.objects.get(project=project, dbname=dbname)
+        return Response(BackupScheduleSerializer(sched).data)
+    except BackupSchedule.DoesNotExist:
+        return Response({
+            'project': project, 'dbname': dbname,
+            'schedule': '0 2 * * *', 'enabled': False,
+            'retention': 7, 'last_run': None, 'last_result': None,
+        })
+
+
+@api_view(['POST'])
+def backup_schedule_save(request, project, dbname):
+    p = get_project(project)
+    if not p:
+        return Response({'error': 'project not found'}, status=404)
+    from services.cron_scheduler import reschedule_backup_job
+    sched, _ = BackupSchedule.objects.get_or_create(project=project, dbname=dbname)
+    sched.schedule = request.data.get('schedule', sched.schedule)
+    sched.enabled = request.data.get('enabled', sched.enabled)
+    sched.retention = request.data.get('retention', sched.retention)
+    sched.save()
+    reschedule_backup_job(sched)
+    return Response(BackupScheduleSerializer(sched).data)
+
+
+@api_view(['GET'])
+def audit_log(request, name):
+    records = AuditLog.objects.filter(project=name)[:50]
+    return Response(AuditLogSerializer(records, many=True).data)
 
 
 @api_view(['GET'])
@@ -249,8 +320,62 @@ def project_detail(request, name):
         return Response({'error': 'project not found'}, status=404)
     p['status'] = get_container_status(p['container'])
     p['running'] = p['status'] == 'running'
+    try:
+        p['container_id'] = get_docker_client().containers.get(p['container']).short_id
+    except Exception:
+        p['container_id'] = None
     p['branch'], pending = get_git_info(p.get('folder'))
     p['pending_count'] = len(pending)
     p['commits'] = get_commit_log(p.get('folder'), n=10)
-    p['addons_paths'] = get_addons_path(p['name'])
+    p['addons_paths'] = get_addons_path(p['name'], p.get('folder'), version=p.get('version'))
     return Response(p)
+
+
+@api_view(['DELETE'])
+def delete_project(request, name):
+    p = get_project(name)
+    if not p:
+        return Response({'error': 'project not found'}, status=404)
+
+    base = settings.ODOO_DEV_BASE
+    folder = p.get('folder')  # e.g. 'projects/medtech' or 'projects/pac/repo'
+
+    # Find the docker-compose directory: start at folder, walk up until we find docker-compose.yml
+    compose_dir = None
+    if folder:
+        candidate = os.path.join(base, folder)
+        while candidate and candidate != base:
+            if os.path.exists(os.path.join(candidate, 'docker-compose.yml')):
+                compose_dir = candidate
+                break
+            candidate = os.path.dirname(candidate)
+
+    # Stop containers and remove volumes
+    if compose_dir and os.path.isdir(compose_dir):
+        try:
+            subprocess.run(
+                ['docker', 'compose', 'down', '-v'],
+                cwd=compose_dir, capture_output=True, timeout=60,
+            )
+        except Exception as e:
+            return Response({'error': f'docker compose down failed: {e}'}, status=500)
+
+        # Delete the project directory
+        try:
+            shutil.rmtree(compose_dir)
+        except Exception as e:
+            return Response({'error': f'Failed to remove directory: {e}'}, status=500)
+
+    # Remove from registry
+    registry_file = settings.REGISTRY_FILE
+    try:
+        with open(registry_file) as f:
+            lines = f.readlines()
+        with open(registry_file, 'w') as f:
+            for line in lines:
+                if not line.startswith(f'{name}|'):
+                    f.write(line)
+    except Exception as e:
+        return Response({'error': f'Failed to update registry: {e}'}, status=500)
+
+    return Response({'ok': True})

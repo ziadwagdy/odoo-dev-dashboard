@@ -4,8 +4,15 @@ from rest_framework.response import Response
 from services.registry import get_project
 from services.config_service import read_odoo_conf, write_odoo_conf, read_env_file, write_env_file
 from services.cron_scheduler import reschedule_job
-from apps.projects.models import CronJob
+from apps.projects.models import CronJob, AuditLog
 from apps.projects.serializers import CronJobSerializer
+
+
+def _audit(project, action, detail='', outcome='success'):
+    try:
+        AuditLog.objects.create(project=project, action=action, detail=detail, outcome=outcome)
+    except Exception:
+        pass
 
 
 @api_view(['GET'])
@@ -26,8 +33,10 @@ def odoo_conf_write(request, project):
         return Response({'error': 'project not found'}, status=404)
     try:
         write_odoo_conf(project, request.data, p.get('folder'))
+        _audit(project, 'config_save', 'odoo.conf')
         return Response({'ok': True})
     except Exception as e:
+        _audit(project, 'config_save', 'odoo.conf', outcome='failed')
         return Response({'ok': False, 'error': str(e)}, status=500)
 
 
@@ -47,8 +56,10 @@ def env_write(request, project):
         return Response({'error': 'project not found'}, status=404)
     try:
         write_env_file(project, request.data, p.get('folder'))
+        _audit(project, 'config_save', '.env')
         return Response({'ok': True})
     except Exception as e:
+        _audit(project, 'config_save', '.env', outcome='failed')
         return Response({'ok': False, 'error': str(e)}, status=500)
 
 

@@ -57,12 +57,13 @@ import { useNotificationsStore } from '@/stores/notifications'
 const props = defineProps<{ projectName: string; active: boolean }>()
 const notify = useNotificationsStore()
 
+const loaded = ref(false)
 const conf = ref<Record<string, Record<string, string>>>({})
 const env = ref<Record<string, string>>({})
 const cron = ref({ enabled: false, schedule: '0 * * * *', last_run: null as string | null, last_result: null as string | null })
 const confError = ref('')
 
-watch(() => props.active, (v) => { if (v) loadAll() })
+watch(() => props.active, (v) => { if (v && !loaded.value) loadAll() })
 
 async function loadAll() {
   const [confRes, envRes, cronRes] = await Promise.all([
@@ -77,6 +78,7 @@ async function loadAll() {
   env.value = await envRes.json()
   const cronData = await cronRes.json()
   cron.value = { enabled: cronData.enabled, schedule: cronData.schedule, last_run: cronData.last_run, last_result: cronData.last_result }
+  loaded.value = true
 }
 
 function updateConf(section: string, key: string, val: string) {
