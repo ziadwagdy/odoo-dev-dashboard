@@ -22,6 +22,11 @@ urlpatterns = [
     path('project/<str:name>/record-deploy', views.record_deploy),
     path('project/<str:name>/history', views.deploy_history),
     path('project/<str:name>/audit', views.audit_log),
+    path('project/<str:name>/environments', views.project_environments),
+    path('project/<str:name>/environments/<str:env_type>/deploy', views.deploy_environment),
     path('project/<str:name>/delete', views.delete_project),
     path('project/<str:name>', views.project_detail),
+    path('groups', views.list_groups),
+    path('groups/save', views.save_group),
+    path('groups/<str:group_name>', views.delete_group),
 ]

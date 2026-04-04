@@ -241,6 +241,21 @@ def git_pull(folder, output_queue):
 
 # Branch management
 
+def get_branches_quick(folder):
+    """Return all known branches (local + remote-tracked) without doing a network fetch."""
+    path = _repo_path(folder)
+    if not os.path.isdir(path):
+        return []
+    try:
+        local_out = _git(path, 'branch', '--format=%(refname:short)', timeout=3).stdout.strip()
+        remote_out = _git(path, 'branch', '-r', '--format=%(refname:short)', timeout=3).stdout.strip()
+        local = [b for b in local_out.splitlines() if b]
+        remote = [b.replace('origin/', '') for b in remote_out.splitlines() if b and 'HEAD' not in b]
+        return sorted(set(local + remote))
+    except Exception:
+        return []
+
+
 def list_branches(folder):
     path = _repo_path(folder)
     if not os.path.isdir(path):

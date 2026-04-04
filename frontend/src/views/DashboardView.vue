@@ -25,6 +25,13 @@
           </svg>
           <span class="hidden sm:inline">New Project</span>
         </RouterLink>
+        <button class="btn btn-ghost text-xs md:text-sm whitespace-nowrap" @click="showGroupManager = true">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+          </svg>
+          <span class="hidden sm:inline">Groups</span>
+        </button>
         <RouterLink to="/health" class="btn btn-ghost text-xs md:text-sm whitespace-nowrap">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
@@ -59,44 +66,88 @@
     </div>
 
     <!-- Loading -->
-    <div v-if="store.loading && !store.projects.length" class="text-center py-20 md:py-32 text-slate-400">
+    <div v-if="store.loading && !store.projects.length && !store.groups.length" class="text-center py-20 md:py-32 text-slate-400">
       <div class="inline-block w-10 h-10 md:w-12 md:h-12 border-4 border-accent/30 border-t-accent rounded-full animate-spin mb-4"></div>
       <p class="text-base md:text-lg font-medium">Loading projects…</p>
     </div>
 
-    <!-- Project groups -->
-    <div v-for="(projects, version) in store.grouped" :key="version" class="mb-8 md:mb-10">
+    <!-- Grouped projects (true environment separation) -->
+    <div v-if="store.groups.length" class="mb-8">
+      <div class="flex items-center gap-2 mb-4">
+        <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400">Projects</h2>
+        <div class="h-px flex-1 bg-gradient-to-r from-border to-transparent"></div>
+      </div>
+      <div class="space-y-4">
+        <ProjectGroupCard
+          v-for="g in store.groups"
+          :key="g.name"
+          :group="g"
+          @restart="restartProject"
+        />
+      </div>
+    </div>
+
+    <!-- Ungrouped projects by version -->
+    <div v-for="(versionProjects, version) in store.ungroupedByVersion" :key="version" class="mb-8 md:mb-10">
       <div class="flex items-center gap-2 md:gap-3 mb-4 md:mb-5">
         <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400">
           Odoo {{ version }}
         </h2>
         <div class="h-px flex-1 bg-gradient-to-r from-border to-transparent"></div>
-        <span class="text-xs text-slate-500 font-medium whitespace-nowrap">{{ projects.length }} {{ projects.length === 1 ? 'project' : 'projects' }}</span>
+        <span class="text-xs text-slate-500 font-medium whitespace-nowrap">
+          {{ versionProjects.length }} {{ versionProjects.length === 1 ? 'project' : 'projects' }}
+        </span>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
         <ProjectCard
-          v-for="p in projects"
+          v-for="p in versionProjects"
           :key="p.name"
           :project="p"
           @restart="restartProject"
         />
       </div>
     </div>
+
+    <!-- Group Manager Modal -->
+    <GroupManagerModal
+      :show="showGroupManager"
+      :available-instances="allInstances"
+      @close="showGroupManager = false"
+      @saved="store.fetchProjects()"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useProjectsStore } from '@/stores/projects'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useConfigStore } from '@/stores/config'
 import ProjectCard from '@/components/ProjectCard.vue'
+import ProjectGroupCard from '@/components/ProjectGroupCard.vue'
+import GroupManagerModal from '@/components/GroupManagerModal.vue'
 import Logo from '@/components/Logo.vue'
 
 const store = useProjectsStore()
 const notify = useNotificationsStore()
 const config = useConfigStore()
+
+const showGroupManager = ref(false)
+
+// All instances (ungrouped + instances inside groups) for the modal dropdowns
+const allInstances = computed(() => {
+  const result = [...store.projects]
+  for (const g of store.groups) {
+    for (const env of ['production', 'staging', 'dev'] as const) {
+      const inst = g.instances[env]
+      if (inst && !result.find(p => p.name === inst.name)) {
+        result.push(inst)
+      }
+    }
+  }
+  return result
+})
 
 onMounted(async () => {
   await store.fetchProjects()

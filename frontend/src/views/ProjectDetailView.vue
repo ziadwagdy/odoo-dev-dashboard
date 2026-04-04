@@ -265,6 +265,14 @@
         </div>
       </div>
 
+      <EnvironmentsTab
+        v-show="activeTab === 'environments'"
+        :project-name="name"
+        :project-url="(project.url as string) || ''"
+        :current-branch="(project.branch as string) || undefined"
+        :running="project.running as boolean"
+        :active="activeTab === 'environments'"
+      />
       <LogViewer v-show="activeTab === 'logs'" :container="project.container as string" :container-id="(project.container_id as string) || ''" :logs-url="config.logsUrl" :active="activeTab === 'logs'" />
       <DatabaseTab v-show="activeTab === 'database'" :project-name="name" :active="activeTab === 'database'" />
       <ModulesTab v-show="activeTab === 'modules'" :project-name="name" :active="activeTab === 'modules'" />
@@ -291,6 +299,7 @@ import ModulesTab from '@/components/ModulesTab.vue'
 import BranchTab from '@/components/BranchTab.vue'
 import SettingsTab from '@/components/SettingsTab.vue'
 import NotebookTab from '@/components/NotebookTab.vue'
+import EnvironmentsTab from '@/components/EnvironmentsTab.vue'
 
 interface AddonPath { path: string; kind: string; label: string }
 interface Commit { hash: string; subject: string; author: string; date: string }
@@ -350,13 +359,14 @@ async function confirmDelete() {
 }
 
 const tabs = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'logs', label: 'Logs' },
-  { id: 'database', label: 'Database' },
-  { id: 'modules', label: 'Modules' },
-  { id: 'branches', label: 'Branches' },
-  { id: 'settings', label: 'Settings' },
-  { id: 'notebook', label: 'Notebook' },
+  { id: 'overview',      label: 'Overview' },
+  { id: 'environments',  label: 'Environments' },
+  { id: 'logs',          label: 'Logs' },
+  { id: 'database',      label: 'Database' },
+  { id: 'modules',       label: 'Modules' },
+  { id: 'branches',      label: 'Branches' },
+  { id: 'settings',      label: 'Settings' },
+  { id: 'notebook',      label: 'Notebook' },
 ]
 
 onMounted(async () => {

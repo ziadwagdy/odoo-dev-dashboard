@@ -40,6 +40,43 @@ class BackupSchedule(models.Model):
         ordering = ['project', 'dbname']
 
 
+class ProjectEnvironment(models.Model):
+    """
+    Maps each environment slot (production / staging / dev) to its branch and database.
+    Mirrors the Odoo.sh model: every environment has its own branch and its own DB.
+    """
+    project           = models.CharField(max_length=100, unique=True)
+
+    production_branch = models.CharField(max_length=200, blank=True, default='')
+    production_db     = models.CharField(max_length=200, blank=True, default='')
+
+    staging_branch    = models.CharField(max_length=200, blank=True, default='')
+    staging_db        = models.CharField(max_length=200, blank=True, default='')
+
+    dev_branch        = models.CharField(max_length=200, blank=True, default='')
+    dev_db            = models.CharField(max_length=200, blank=True, default='')
+
+    def branch_for(self, env_type):
+        return getattr(self, f'{env_type}_branch', '')
+
+    def db_for(self, env_type):
+        return getattr(self, f'{env_type}_db', '')
+
+    class Meta:
+        ordering = ['project']
+
+
+class ProjectGroup(models.Model):
+    """Groups separate running instances under one project (production/staging/dev)."""
+    name                 = models.CharField(max_length=100, unique=True)
+    production_instance  = models.CharField(max_length=100, blank=True, default='')
+    staging_instance     = models.CharField(max_length=100, blank=True, default='')
+    dev_instance         = models.CharField(max_length=100, blank=True, default='')
+
+    class Meta:
+        ordering = ['name']
+
+
 class AuditLog(models.Model):
     project      = models.CharField(max_length=100)
     action       = models.CharField(max_length=50)
