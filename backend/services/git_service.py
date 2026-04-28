@@ -74,6 +74,35 @@ def get_current_commit(folder):
         return None
 
 
+def get_remote_repo_name(folder: str):
+    path = _repo_path(folder)
+    if not os.path.isdir(path):
+        return None
+    try:
+        result = _git(path, 'remote', 'get-url', 'origin', timeout=5)
+        if result.returncode != 0:
+            return None
+        url = result.stdout.strip()
+        if not url:
+            return None
+        name = url.rstrip('/').removesuffix('.git').rsplit('/', 1)[-1]
+        return name.lower() if name else None
+    except Exception:
+        return None
+
+
+def get_current_branch(folder: str):
+    path = _repo_path(folder)
+    if not os.path.isdir(path):
+        return None
+    try:
+        result = _git(path, 'rev-parse', '--abbrev-ref', 'HEAD', timeout=3)
+        branch = result.stdout.strip()
+        return branch if branch and branch != 'HEAD' else None
+    except Exception:
+        return None
+
+
 def _find_compose_path_for_project(odoo_dev_base, folder=None, version=None):
     """Locate docker-compose.yml for a project (same logic as db_service._find_compose_path)."""
     if folder:
@@ -90,24 +119,52 @@ def _find_compose_path_for_project(odoo_dev_base, folder=None, version=None):
     return None
 
 
-def _build_host_to_container_map(compose_path):
+def _build_host_to_container_map(compose_path, service_name=None):
     """
     Parse a docker-compose.yml and return a dict mapping host paths to container
-    paths for all /mnt/* volume mounts.  Expands $HOME / ${HOME}.
+    paths for /mnt/* volume mounts. Expands $HOME / ${HOME}.
+
+    If service_name is given, only volumes for that specific service are returned.
+    This prevents sibling services in the same compose file from leaking their
+    mount paths into another project's addons list.
     """
     if not compose_path or not os.path.exists(compose_path):
         return {}
-    import re as _re
+    import yaml as _yaml
     host_home = os.path.dirname(settings.ODOO_DEV_BASE)
+
+    def _expand(s):
+        if not isinstance(s, str):
+            return s
+        return s.replace('${HOME}', host_home).replace('$HOME', host_home) \
+                .replace('${ODOO_DEV_BASE}', settings.ODOO_DEV_BASE) \
+                .replace('~', host_home)
+
     with open(compose_path) as fh:
-        content = fh.read()
-    content = content.replace('${HOME}', host_home).replace('$HOME', host_home)
-    content = content.replace('${ODOO_DEV_BASE}', settings.ODOO_DEV_BASE)
+        try:
+            data = _yaml.safe_load(fh)
+        except Exception:
+            return {}
+
+    services = (data or {}).get('services', {})
+    if service_name and service_name in services:
+        services_to_scan = {service_name: services[service_name]}
+    else:
+        services_to_scan = services
+
+    compose_dir = os.path.dirname(compose_path)
+
     result = {}
-    for m in _re.finditer(r'^\s*-\s+([^:]+):(/mnt/[^:\s]+)', content, _re.MULTILINE):
-        host = m.group(1).strip()
-        container = m.group(2).strip()
-        result[host] = container
+    for svc in services_to_scan.values():
+        for vol in (svc or {}).get('volumes', []):
+            if isinstance(vol, str) and ':' in vol:
+                parts = vol.split(':')
+                host = _expand(parts[0]).strip()
+                container = parts[1].strip().split(':')[0]
+                if not os.path.isabs(host):
+                    host = os.path.normpath(os.path.join(compose_dir, host))
+                if container.startswith('/mnt/'):
+                    result[host] = container
     return result
 
 
@@ -128,9 +185,10 @@ def get_addons_path(project_name, folder=None, version=None):
     if not os.path.isdir(addons_dir):
         return []
 
-    # Try to find the docker-compose.yml so we can map host paths → container paths
+    # Try to find the docker-compose.yml so we can map host paths → container paths.
+    # Pass project_name as service_name so mounts from sibling services are excluded.
     compose_path = _find_compose_path_for_project(base, folder=folder, version=version)
-    host_to_container = _build_host_to_container_map(compose_path)
+    host_to_container = _build_host_to_container_map(compose_path, service_name=project_name)
 
     def _host_to_container_path(host_path):
         """Reverse-map a host path to its container /mnt/... path."""
@@ -224,6 +282,7 @@ def _classify_path(p):
 
 def git_pull(folder, output_queue):
     path = _repo_path(folder)
+    exit_code = 1
     try:
         proc = subprocess.Popen(
             ['git', '-C', path, 'pull', '--ff-only'],
@@ -232,11 +291,13 @@ def git_pull(folder, output_queue):
         for line in proc.stdout:
             output_queue.put(line.rstrip())
         proc.wait()
+        exit_code = proc.returncode
         output_queue.put(f'--- exit code: {proc.returncode} ---')
     except Exception as e:
         output_queue.put(f'Error: {e}')
     finally:
         output_queue.put(None)
+    return exit_code
 
 
 # Branch management

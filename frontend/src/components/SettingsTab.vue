@@ -51,6 +51,7 @@
 </template>
 
 <script setup lang="ts">
+import { api } from '@/api'
 import { ref, computed, watch } from 'vue'
 import { useNotificationsStore } from '@/stores/notifications'
 
@@ -67,9 +68,9 @@ watch(() => props.active, (v) => { if (v && !loaded.value) loadAll() })
 
 async function loadAll() {
   const [confRes, envRes, cronRes] = await Promise.all([
-    fetch(`/api/settings/${props.projectName}/odoo-conf`),
-    fetch(`/api/settings/${props.projectName}/env`),
-    fetch(`/api/settings/${props.projectName}/cron`),
+    api(`/api/settings/${props.projectName}/odoo-conf`),
+    api(`/api/settings/${props.projectName}/env`),
+    api(`/api/settings/${props.projectName}/cron`),
   ])
   const confData = await confRes.json()
   if (confData.error) confError.value = confData.error
@@ -90,7 +91,7 @@ function updateEnv(key: string, val: string) {
 }
 
 async function saveConf() {
-  const res = await fetch(`/api/settings/${props.projectName}/odoo-conf/write`, {
+  const res = await api(`/api/settings/${props.projectName}/odoo-conf/write`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(conf.value),
   })
@@ -99,7 +100,7 @@ async function saveConf() {
 }
 
 async function saveEnv() {
-  const res = await fetch(`/api/settings/${props.projectName}/env/write`, {
+  const res = await api(`/api/settings/${props.projectName}/env/write`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(env.value),
   })
@@ -108,7 +109,7 @@ async function saveEnv() {
 }
 
 async function saveCron() {
-  const res = await fetch(`/api/settings/${props.projectName}/cron/save`, {
+  const res = await api(`/api/settings/${props.projectName}/cron/save`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ enabled: cron.value.enabled, schedule: cron.value.schedule }),
   })

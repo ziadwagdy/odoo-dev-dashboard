@@ -15,8 +15,10 @@ def _conf_path(project_name, folder=None):
     return os.path.join(base, 'config', 'odoo.conf')
 
 
-def _find_odoo_conf(project_name, folder=None):
-    """Return path to odoo.conf, trying folder-based path first then flat project_name path."""
+def _find_odoo_conf(project_name, folder=None, conf_file=None):
+    """Return path to odoo.conf. Uses explicit conf_file from registry when provided."""
+    if conf_file:
+        return os.path.join(settings.ODOO_DEV_BASE, conf_file)
     path = _conf_path(project_name, folder)
     if os.path.exists(path):
         return path
@@ -43,8 +45,8 @@ def _find_env_path(project_name, folder=None):
     return path
 
 
-def read_odoo_conf(project_name, folder=None):
-    path = _find_odoo_conf(project_name, folder)
+def read_odoo_conf(project_name, folder=None, conf_file=None):
+    path = _find_odoo_conf(project_name, folder, conf_file)
     if not os.path.exists(path):
         return {'error': f'odoo.conf not found at {path}'}
     cp = configparser.ConfigParser()
@@ -55,9 +57,9 @@ def read_odoo_conf(project_name, folder=None):
     return result
 
 
-def write_odoo_conf(project_name, data: dict, folder=None):
+def write_odoo_conf(project_name, data: dict, folder=None, conf_file=None):
     """data: {section: {key: value}}"""
-    path = _find_odoo_conf(project_name, folder)
+    path = _find_odoo_conf(project_name, folder, conf_file)
     if not os.path.exists(path):
         os.makedirs(os.path.dirname(path), exist_ok=True)
     cp = configparser.ConfigParser()

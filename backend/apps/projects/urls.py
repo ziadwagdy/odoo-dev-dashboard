@@ -4,7 +4,9 @@ from . import views
 urlpatterns = [
     path('config', views.api_config),
     path('status', views.api_status),
+    path('storage', views.api_storage),
     path('restart/<str:container_name>', views.api_restart),
+    path('start/<str:container_name>', views.api_start),
     path('stop/<str:container_name>', views.api_stop),
     path('logs/<str:container_name>/download', views.logs_download),
     path('db/<str:project>/list', views.db_list),
@@ -22,11 +24,6 @@ urlpatterns = [
     path('project/<str:name>/record-deploy', views.record_deploy),
     path('project/<str:name>/history', views.deploy_history),
     path('project/<str:name>/audit', views.audit_log),
-    path('project/<str:name>/environments', views.project_environments),
-    path('project/<str:name>/environments/<str:env_type>/deploy', views.deploy_environment),
     path('project/<str:name>/delete', views.delete_project),
     path('project/<str:name>', views.project_detail),
-    path('groups', views.list_groups),
-    path('groups/save', views.save_group),
-    path('groups/<str:group_name>', views.delete_group),
 ]

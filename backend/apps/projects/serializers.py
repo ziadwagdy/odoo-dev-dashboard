@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import DeployHistory, CronJob, BackupSchedule, AuditLog, ProjectEnvironment, ProjectGroup
+from .models import DeployHistory, CronJob, BackupSchedule, AuditLog
 
 
 class DeployHistorySerializer(serializers.ModelSerializer):
@@ -26,13 +26,3 @@ class AuditLogSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class ProjectEnvironmentSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ProjectEnvironment
-        fields = '__all__'
-
-
-class ProjectGroupSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ProjectGroup
-        fields = '__all__'

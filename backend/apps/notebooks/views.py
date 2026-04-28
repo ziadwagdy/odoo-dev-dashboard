@@ -1,5 +1,7 @@
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
+
+from core.permissions import IsAdmin
 
 from services.registry import get_project
 from .kernel_manager import start_kernel, stop_kernel, get_kernel_status
@@ -11,6 +13,7 @@ def kernel_status(request, project):
 
 
 @api_view(['POST'])
+@permission_classes([IsAdmin])
 def kernel_start(request, project):
     p = get_project(project)
     if not p:

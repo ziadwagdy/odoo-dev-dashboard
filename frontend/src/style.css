@@ -2,27 +2,104 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Design Tokens ───────────────────────────────────────────────────
+   RGB triplets — lets Tailwind opacity modifiers work:
+     bg-surface/80  →  rgb(var(--c-surface) / 0.8)
+   ───────────────────────────────────────────────────────────────── */
+:root,
+[data-theme="dark"] {
+  /* Backgrounds */
+  --c-bg:         15 11 20;
+  --c-bg2:        26 20 32;
+  --c-surface:    37 27 47;
+  --c-surface-hv: 45 33 56;
+  /* Borders */
+  --c-border:     61 45 74;
+  --c-border-hv:  77 61 90;
+  /* Brand */
+  --c-accent:     162 70 137;
+  --c-accent-hv:  135 90 123;
+  --c-accent-lt:  201 95 181;
+  --c-primary:    113 75 103;
+  --c-primary-dk: 93 61 86;
+
+  /* Text tokens (used by component overrides below) */
+  --t-base:   241 245 249;   /* slate-100  */
+  --t-sec:    148 163 184;   /* slate-400  */
+  --t-muted:  100 116 139;   /* slate-500  */
+  --t-dim:    71  85 105;    /* slate-600  */
+
+  /* Misc */
+  --body-grad-1: rgba(162,70,137,0.16);
+  --body-grad-2: rgba(113,75,103,0.13);
+  --body-grad-3: rgba(162,70,137,0.09);
+  --card-shadow: 0 4px 6px -1px rgba(0,0,0,0.30), 0 2px 4px -1px rgba(0,0,0,0.20);
+  --card-hover-shadow: 0 10px 15px -3px rgba(162,70,137,0.20), 0 4px 6px -2px rgba(162,70,137,0.10);
+  --log-bg: rgba(26,20,32,0.50);
+  --input-bg: rgba(37,27,47,0.50);
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  /* Backgrounds */
+  --c-bg:         249 247 252;
+  --c-bg2:        240 234 250;
+  --c-surface:    255 255 255;
+  --c-surface-hv: 245 240 252;
+  /* Borders */
+  --c-border:     224 214 238;
+  --c-border-hv:  201 184 228;
+  /* Brand — same accent, different primary tint in bg context */
+  --c-accent:     162 70 137;
+  --c-accent-hv:  135 90 123;
+  --c-accent-lt:  201 95 181;
+  --c-primary:    113 75 103;
+  --c-primary-dk: 93 61 86;
+
+  /* Text tokens */
+  --t-base:   26  15  46;    /* near-black purple */
+  --t-sec:    90  69 112;    /* medium purple */
+  --t-muted:  128 108 152;   /* muted purple */
+  --t-dim:    168 150 190;   /* dim purple */
+
+  /* Misc */
+  --body-grad-1: rgba(162,70,137,0.05);
+  --body-grad-2: rgba(113,75,103,0.04);
+  --body-grad-3: rgba(162,70,137,0.03);
+  --card-shadow: 0 4px 16px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.04);
+  --card-hover-shadow: 0 8px 28px rgba(162,70,137,0.14), 0 2px 8px rgba(162,70,137,0.07);
+  --log-bg: rgba(240,234,250,0.70);
+  --input-bg: rgba(255,255,255,0.80);
+  color-scheme: light;
+}
+
+/* ── Base ──────────────────────────────────────────────────────────── */
 @layer base {
   body {
-    @apply bg-bg text-slate-100 font-sans antialiased;
-    background-image: radial-gradient(circle at 20% 50%, rgba(162, 70, 137, 0.08) 0%, transparent 50%),
-                      radial-gradient(circle at 80% 80%, rgba(113, 75, 103, 0.06) 0%, transparent 50%);
+    @apply bg-bg font-sans antialiased;
+    color: rgb(var(--t-base));
+    background-image:
+      radial-gradient(ellipse at 10% 40%, var(--body-grad-1) 0%, transparent 55%),
+      radial-gradient(ellipse at 88% 82%, var(--body-grad-2) 0%, transparent 50%),
+      radial-gradient(ellipse at 58% 8%,  var(--body-grad-3) 0%, transparent 40%);
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
   * { box-sizing: border-box; }
 }
 
+/* ── Components ────────────────────────────────────────────────────── */
 @layer components {
-  /* Modern Card with Glassmorphism */
+  /* Modern Card */
   .card {
     @apply bg-surface/80 backdrop-blur-xl border border-border rounded-2xl p-4 md:p-6 transition-all duration-300;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--card-shadow);
   }
   .card:hover {
     @apply border-accent/40 bg-surface-hover/80;
-    box-shadow: 0 10px 15px -3px rgba(162, 70, 137, 0.2), 0 4px 6px -2px rgba(162, 70, 137, 0.1);
+    box-shadow: var(--card-hover-shadow);
     transform: translateY(-2px);
   }
-  
+
   /* Buttons */
   .btn {
     @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
@@ -32,133 +109,409 @@
     position: relative;
     overflow: hidden;
   }
-  .btn-primary:hover {
-    @apply brightness-110;
-  }
+  .btn-primary:hover { @apply brightness-110; }
   .btn-ghost {
-    @apply btn bg-transparent border border-border hover:border-accent/60 hover:bg-accent/10 text-slate-300;
+    @apply btn bg-transparent border border-border hover:border-accent/60 hover:bg-accent/10;
+    color: rgb(var(--t-sec));
   }
-  .btn-ghost:hover {
-    @apply text-white;
-  }
+  .btn-ghost:hover { color: rgb(var(--t-base)); }
   .btn-danger {
     @apply btn bg-transparent border border-red-800/60 hover:bg-red-900/30 hover:border-red-700 text-red-400;
   }
   .btn-warning {
     @apply btn bg-gradient-to-br from-warning to-orange-500 text-white hover:scale-105;
   }
-  .btn-sm {
-    @apply px-3 py-1.5 text-xs;
-  }
-  
-  /* Enhanced Badges */
+  .btn-sm { @apply px-3 py-1.5 text-xs; }
+
+  /* Badges */
   .badge {
     @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold;
   }
-  .badge-running  { 
+  .badge-running {
     @apply bg-gradient-to-r from-emerald-500/20 to-green-500/20 text-emerald-300 border border-emerald-500/40;
-    box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+    box-shadow: 0 0 10px rgba(16,185,129,0.3);
   }
-  .badge-exited   { 
-    @apply bg-gradient-to-r from-red-500/20 to-rose-500/20 text-red-300 border border-red-500/40;
-  }
-  .badge-not_found { 
-    @apply bg-gray-800/40 text-gray-400 border border-gray-700/50;
-  }
-  .badge-restarting { 
+  .badge-exited     { @apply bg-gradient-to-r from-red-500/20 to-rose-500/20 text-red-300 border border-red-500/40; }
+  .badge-not_found  { @apply bg-gray-800/40 text-gray-400 border border-gray-700/50; }
+  .badge-restarting {
     @apply bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 border border-amber-500/40;
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    animation: pulse 2s cubic-bezier(0.4,0,0.6,1) infinite;
   }
-  .badge-error    { 
-    @apply bg-gradient-to-r from-red-500/20 to-rose-500/20 text-red-300 border border-red-500/40;
-  }
-  
+  .badge-error { @apply bg-gradient-to-r from-red-500/20 to-rose-500/20 text-red-300 border border-red-500/40; }
+
   /* Status Dots */
-  .dot {
-    @apply w-2 h-2 rounded-full;
-  }
-  .dot-green  { 
-    @apply bg-emerald-400;
-    box-shadow: 0 0 8px rgba(52, 211, 153, 0.6);
-  }
-  .dot-red    { 
-    @apply bg-red-400;
-    box-shadow: 0 0 8px rgba(248, 113, 113, 0.6);
-  }
-  .dot-amber  { 
-    @apply bg-amber-400;
-    box-shadow: 0 0 8px rgba(251, 191, 36, 0.6);
-  }
-  
-  /* Enhanced Tabs */
+  .dot       { @apply w-2 h-2 rounded-full; }
+  .dot-green { @apply bg-emerald-400; box-shadow: 0 0 8px rgba(52,211,153,0.6); }
+  .dot-red   { @apply bg-red-400;     box-shadow: 0 0 8px rgba(248,113,113,0.6); }
+  .dot-amber { @apply bg-amber-400;   box-shadow: 0 0 8px rgba(251,191,36,0.6); }
+
+  /* Tabs */
   .tab-btn {
-    @apply px-3 md:px-5 py-2 md:py-3 text-sm font-semibold text-slate-400 border-b-2 border-transparent hover:text-white transition-all duration-200;
+    @apply px-3 md:px-5 py-2 md:py-3 text-sm font-semibold border-b-2 border-transparent hover:text-white transition-all duration-200;
+    color: rgb(var(--t-sec));
     position: relative;
-    min-height: 44px; /* Touch-friendly */
+    min-height: 44px;
   }
-  .tab-btn.active {
-    @apply text-accent border-accent;
-  }
+  .tab-btn.active { @apply border-accent; color: #a24689; }
   .tab-btn.active::before {
     content: '';
     position: absolute;
-    bottom: -2px;
-    left: 0;
-    right: 0;
-    height: 2px;
+    bottom: -2px; left: 0; right: 0; height: 2px;
     background: linear-gradient(90deg, #714b67 0%, #a24689 100%);
-    box-shadow: 0 0 10px rgba(162, 70, 137, 0.5);
+    box-shadow: 0 0 10px rgba(162,70,137,0.5);
   }
-  
+
   /* Log Output */
   .log-output {
-    @apply font-mono text-[13px] sm:text-xs leading-6 bg-bg-secondary/50 border border-border rounded-xl p-5 overflow-auto max-h-[500px];
-    box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.3);
+    @apply font-mono text-[13px] sm:text-xs leading-6 border border-border rounded-xl p-5 overflow-auto max-h-[500px];
+    background: var(--log-bg);
+    box-shadow: inset 0 2px 10px rgba(0,0,0,0.15);
   }
-  
-  /* Enhanced Tables */
-  .table-base {
-    @apply w-full text-sm;
-  }
+
+  /* Tables */
+  .table-base { @apply w-full text-sm; }
   .table-base thead {
-    @apply text-xs uppercase tracking-wider text-slate-400 border-b border-border/50;
+    @apply text-xs uppercase tracking-wider border-b border-border/50;
+    color: rgb(var(--t-muted));
   }
-  .table-base th {
-    @apply px-3 py-2 sm:px-4 sm:py-3 font-semibold;
-  }
-  .table-base tbody tr {
-    @apply border-b border-border/30 hover:bg-surface/30 transition-colors;
-  }
-  .table-base td {
-    @apply px-3 py-2 sm:px-4 sm:py-4;
-  }
-  
-  /* Input Fields */
+  .table-base th        { @apply px-3 py-2.5 sm:px-4 sm:py-3 font-semibold text-left align-middle; }
+  .table-base tbody tr  { @apply border-b border-border/30 transition-colors; }
+  .table-base tbody tr:hover { background: rgba(var(--c-surface-hv), 0.3); }
+  .table-base td        { @apply px-3 py-2.5 sm:px-4 sm:py-3 align-middle; }
+
+  .table-row-running    { background: rgba(16,185,129,0.04); }
+  .table-row-restarting { background: rgba(245,158,11,0.04); }
+  .table-row-stopped    { background: rgba(239,68,68,0.03); opacity: 0.75; }
+  .table-row-running    td:first-child { box-shadow: inset 3px 0 0 rgba(16,185,129,0.45); }
+  .table-row-restarting td:first-child { box-shadow: inset 3px 0 0 rgba(245,158,11,0.45); }
+  .table-row-stopped    td:first-child { box-shadow: inset 3px 0 0 rgba(239,68,68,0.25); }
+
+  /* Inputs */
   .input {
-    @apply w-full px-4 py-2.5 bg-surface/50 border border-border rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-accent/50 focus:ring-2 focus:ring-accent/20 transition-all;
+    @apply w-full px-4 py-2.5 border border-border rounded-xl placeholder-slate-500 focus:outline-none focus:border-accent/50 focus:ring-2 focus:ring-accent/20 transition-all;
+    background: var(--input-bg);
+    color: rgb(var(--t-base));
   }
-  
-  /* Textarea */
   .textarea {
-    @apply w-full px-4 py-3 bg-surface/50 border border-border rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-accent/50 focus:ring-2 focus:ring-accent/20 transition-all font-mono text-sm;
+    @apply w-full px-4 py-3 border border-border rounded-xl placeholder-slate-500 focus:outline-none focus:border-accent/50 focus:ring-2 focus:ring-accent/20 transition-all font-mono text-sm;
+    background: var(--input-bg);
+    color: rgb(var(--t-base));
   }
 }
 
-/* ANSI log colors */
-.log-critical { color: #f87171; font-weight: bold; }
-.log-error    { color: #fca5a5; }
-.log-warning  { color: #fbbf24; }
-.log-debug    { color: #6b7280; }
-.log-info     { color: #e2e8f0; }
+/* ── Light-mode: all overrides ─────────────────────────────────────
+   Strategy: target Tailwind utility class names directly, since
+   components use hardcoded slate/color classes throughout.
+   !important beats Tailwind utility specificity everywhere.
+   ───────────────────────────────────────────────────────────────── */
 
-/* Pulse animation */
+/* ── Slate text ── */
+[data-theme="light"] .text-white,
+[data-theme="light"] .text-slate-50,
+[data-theme="light"] .text-slate-100,
+[data-theme="light"] .text-slate-200  { color: rgb(var(--t-base)) !important; }
+[data-theme="light"] .text-slate-300  { color: rgba(26,15,46,0.72) !important; }
+[data-theme="light"] .text-slate-400  { color: rgb(var(--t-sec)) !important; }
+[data-theme="light"] .text-slate-500,
+[data-theme="light"] .text-slate-600  { color: rgb(var(--t-muted)) !important; }
+[data-theme="light"] .text-slate-700  { color: rgb(var(--t-dim)) !important; }
+
+/* Hover text variants */
+[data-theme="light"] .hover\:text-white:hover,
+[data-theme="light"] .hover\:text-slate-200:hover { color: rgb(var(--t-base)) !important; }
+[data-theme="light"] .hover\:text-slate-100:hover  { color: rgb(var(--t-base)) !important; }
+
+/* ── Semantic text: light versions are too faint on white ── */
+[data-theme="light"] .text-red-300,
+[data-theme="light"] .text-red-400       { color: #dc2626 !important; }  /* red-600 */
+[data-theme="light"] .text-red-300\/80   { color: rgba(220,38,38,0.85) !important; }
+[data-theme="light"] .text-green-300,
+[data-theme="light"] .text-green-400     { color: #059669 !important; }  /* green-600 */
+[data-theme="light"] .text-emerald-300,
+[data-theme="light"] .text-emerald-400   { color: #059669 !important; }
+[data-theme="light"] .text-amber-300,
+[data-theme="light"] .text-amber-400     { color: #d97706 !important; }  /* amber-600 */
+[data-theme="light"] .text-warning       { color: #b45309 !important; }  /* amber-700 */
+[data-theme="light"] .text-blue-300      { color: #2563eb !important; }
+[data-theme="light"] .text-indigo-400    { color: #4f46e5 !important; }
+[data-theme="light"] .text-purple-300    { color: #7c3aed !important; }
+[data-theme="light"] .text-cyan-300      { color: #0891b2 !important; }
+
+/* ── SVG fill override (CpuGauge text) ── */
+[data-theme="light"] .fill-white { fill: rgb(var(--t-base)) !important; }
+
+/* ── Hardcoded dark hex modal/panel backgrounds ── */
+/* CSS can target these escaped class names directly */
+[data-theme="light"] .bg-\[\#12151f\],
+[data-theme="light"] .bg-\[\#1a1d27\],
+[data-theme="light"] .bg-\[\#1a1d2e\]  { background-color: rgb(var(--c-surface)) !important; }
+
+/* ── Dark slate backgrounds ── */
+[data-theme="light"] .bg-slate-700     { background-color: rgba(var(--c-border), 0.55) !important; }
+[data-theme="light"] .bg-slate-700\/60 { background-color: rgba(var(--c-border), 0.35) !important; }
+[data-theme="light"] .bg-slate-800     { background-color: rgb(var(--c-bg2)) !important; }
+[data-theme="light"] .bg-slate-800\/50 { background-color: rgba(var(--c-bg2), 0.75) !important; }
+[data-theme="light"] .bg-slate-800\/40 { background-color: rgba(var(--c-bg2), 0.65) !important; }
+[data-theme="light"] .bg-slate-900     { background-color: rgb(var(--c-bg)) !important; }
+
+/* Hover slate background variants */
+[data-theme="light"] .hover\:bg-slate-700:hover { background-color: rgba(var(--c-border), 0.75) !important; }
+
+/* ── Dark saturated badge/state backgrounds ── */
+/* These look muddy/dark on white; replace with soft transparent versions */
+[data-theme="light"] .bg-green-900\/40  { background-color: rgba(16,185,129,0.10) !important; }
+[data-theme="light"] .bg-amber-900\/40  { background-color: rgba(245,158,11,0.10) !important; }
+[data-theme="light"] .bg-red-900\/40    { background-color: rgba(239,68,68,0.10) !important; }
+[data-theme="light"] .bg-red-950\/30    { background-color: rgba(239,68,68,0.06) !important; }
+[data-theme="light"] .bg-blue-500\/15   { background-color: rgba(59,130,246,0.08) !important; }
+[data-theme="light"] .bg-amber-500\/15  { background-color: rgba(245,158,11,0.08) !important; }
+[data-theme="light"] .bg-purple-500\/15 { background-color: rgba(168,85,247,0.08) !important; }
+[data-theme="light"] .bg-cyan-500\/15   { background-color: rgba(6,182,212,0.08) !important; }
+[data-theme="light"] .bg-slate-500\/15  { background-color: rgba(var(--c-border),0.25) !important; }
+[data-theme="light"] .bg-slate-800\/50  { background-color: rgba(var(--c-bg2),0.7) !important; }
+
+/* ── Subtle dark overlays used in log/code areas ── */
+[data-theme="light"] .bg-black\/10 { background-color: rgba(var(--c-bg2), 0.45) !important; }
+[data-theme="light"] .bg-black\/20 { background-color: rgba(var(--c-bg2), 0.55) !important; }
+
+/* ── Dark borders ── */
+[data-theme="light"] .border-\[\#2d3148\]  { border-color: rgb(var(--c-border)) !important; }
+[data-theme="light"] .border-\[\#1e2235\]  { border-color: rgba(var(--c-border), 0.5) !important; }
+[data-theme="light"] .border-slate-600     { border-color: rgb(var(--c-border)) !important; }
+[data-theme="light"] .border-slate-600\/40 { border-color: rgba(var(--c-border), 0.7) !important; }
+
+/* ── Layout surfaces ── */
+[data-theme="light"] header {
+  background: rgba(255,255,255,0.85);
+  border-color: rgba(var(--c-border), 0.8);
+}
+[data-theme="light"] aside {
+  background: rgba(255,255,255,0.9);
+  border-color: rgba(var(--c-border), 0.8);
+}
+
+/* ── Badge adjustments ── */
+[data-theme="light"] .badge-not_found {
+  background: rgba(var(--c-border), 0.3);
+  color: rgb(var(--t-muted));
+  border-color: rgba(var(--c-border), 0.6);
+}
+
+/* ── Log line semantic colors (light-adjusted) ── */
+[data-theme="light"] .log-dim       { color: #9080a8; }
+[data-theme="light"] .log-separator { color: #c9b8e4; }
+[data-theme="light"] .log-debug     { color: #a090b8; }
+[data-theme="light"] .log-info      { color: #4a3a60; }
+
+/* ── Notebook: code areas stay dark in light mode; fix text contrast ── */
+/* Cell header: use surface instead of near-black */
+[data-theme="light"] .notebook-header { background-color: rgb(var(--c-bg2)) !important; }
+/* Textarea + stdout output: keep dark bg, restore light text */
+[data-theme="light"] .notebook-code {
+  color: #e2e8f0 !important;
+  background-color: #0a0c12 !important;
+}
+
+/* ── CodeMirror stays dark ── */
+[data-theme="light"] .cm-editor {
+  background: #12101a !important;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.18);
+  border: 1px solid rgba(var(--c-border), 0.6);
+}
+
+/* ── ANSI / log semantic colors ──────────────────────────────────── */
+.log-critical  { color: #f87171; font-weight: bold; }
+.log-error     { color: #fca5a5; }
+.log-warning   { color: #fbbf24; }
+.log-debug     { color: #6b7280; }
+.log-info      { color: #e2e8f0; }
+.log-success   { color: #4ade80; }
+.log-step      { color: #818cf8; font-weight: 600; }
+.log-separator { color: #374151; }
+.log-dim       { color: #4b5563; }
+
+/* ── Animations ─────────────────────────────────────────────────── */
 @keyframes pulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  50%       { opacity: 0.4; }
 }
 .pulse { animation: pulse 1.5s ease-in-out infinite; }
 
-/* CodeMirror dark theme integration */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in-up { animation: fadeInUp 0.32s ease-out both; }
+
+@keyframes fadeInRow {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.fade-in-row { animation: fadeInRow 0.24s ease-out both; }
+
+/* Theme transition — smooth switch */
+*, *::before, *::after {
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: 200ms;
+  transition-timing-function: ease;
+}
+/* But don't slow down interactive transitions */
+button, a, [role="button"] {
+  transition-duration: 150ms;
+}
+
+/* ── CpuGauge arc background ────────────────────────────────────── */
+.cpu-arc-bg { stroke: rgba(42, 49, 80, 0.50); }
+[data-theme="light"] .cpu-arc-bg { stroke: rgba(var(--c-border), 0.70); }
+
+/* ══ Light-mode visual polish ══════════════════════════════════════
+   These go beyond the utility-class overrides above and target
+   component-level classes and hover states that need richer treatment
+   on a white/cream background.
+   ═════════════════════════════════════════════════════════════════ */
+
+/* ── Nav item hover: white/5 is invisible on white ── */
+[data-theme="light"] .nav-item:hover {
+  background-color: rgba(var(--c-border), 0.32) !important;
+  color: rgb(var(--t-base)) !important;
+}
+[data-theme="light"] .nav-active {
+  background-color: rgba(var(--c-accent), 0.10) !important;
+}
+
+/* ── hover:bg-white/5 pattern used in various interactive elements ── */
+[data-theme="light"] .hover\:bg-white\/5:hover {
+  background-color: rgba(var(--c-border), 0.28) !important;
+}
+
+/* ── Tab button: hover should darken text, not whiten it ── */
+[data-theme="light"] .tab-btn:hover {
+  color: rgb(var(--t-base)) !important;
+}
+[data-theme="light"] .tab-btn.active {
+  color: rgb(var(--c-accent)) !important;
+}
+
+/* ── Button ghost: hover background visible on white ── */
+[data-theme="light"] .btn-ghost:hover {
+  background-color: rgba(var(--c-border), 0.40) !important;
+  border-color: rgba(var(--c-accent), 0.45) !important;
+  color: rgb(var(--t-base)) !important;
+}
+[data-theme="light"] .btn-ghost {
+  border-color: rgba(var(--c-border), 0.9) !important;
+}
+
+/* ── btn-danger: dark border looks off on white ── */
+[data-theme="light"] .btn-danger {
+  border-color: rgba(220, 38, 38, 0.45) !important;
+  color: #dc2626 !important;
+}
+[data-theme="light"] .btn-danger:hover {
+  background-color: rgba(220, 38, 38, 0.08) !important;
+  border-color: rgba(220, 38, 38, 0.65) !important;
+}
+
+/* ── Card: crisper surface + deeper shadow on light ── */
+[data-theme="light"] .card {
+  background: rgba(255, 255, 255, 0.92) !important;
+  border-color: rgba(var(--c-border), 0.65) !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04) !important;
+}
+[data-theme="light"] .card:hover {
+  border-color: rgba(var(--c-accent), 0.35) !important;
+  box-shadow: 0 6px 24px rgba(162,70,137,0.11), 0 2px 8px rgba(162,70,137,0.06) !important;
+}
+
+/* ── Sidebar: slightly elevated ── */
+[data-theme="light"] aside {
+  background: rgba(255, 255, 255, 0.96) !important;
+  border-color: rgba(var(--c-border), 0.7) !important;
+  box-shadow: 2px 0 12px rgba(0,0,0,0.04);
+}
+
+/* ── Header: clean with bottom border ── */
+[data-theme="light"] header {
+  background: rgba(255, 255, 255, 0.92) !important;
+  border-color: rgba(var(--c-border), 0.7) !important;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.05);
+}
+
+/* ── Status dot glows: too flashy on white ── */
+[data-theme="light"] .dot-green { box-shadow: 0 0 5px rgba(5,150,105,0.35) !important; }
+[data-theme="light"] .dot-red   { box-shadow: 0 0 5px rgba(220,38,38,0.35) !important; }
+[data-theme="light"] .dot-amber { box-shadow: 0 0 5px rgba(217,119,6,0.35) !important; }
+
+/* ── Badge glows: tone down on white ── */
+[data-theme="light"] .badge-running {
+  background: linear-gradient(to right, rgba(5,150,105,0.10), rgba(16,185,129,0.08)) !important;
+  border-color: rgba(5,150,105,0.35) !important;
+  box-shadow: none !important;
+}
+[data-theme="light"] .badge-exited {
+  background: linear-gradient(to right, rgba(220,38,38,0.08), rgba(244,63,94,0.07)) !important;
+  border-color: rgba(220,38,38,0.30) !important;
+}
+[data-theme="light"] .badge-restarting {
+  background: linear-gradient(to right, rgba(217,119,6,0.10), rgba(234,88,12,0.08)) !important;
+  border-color: rgba(217,119,6,0.35) !important;
+}
+
+/* ── Table: improved hover + status indicators on white ── */
+[data-theme="light"] .table-row-running    { background: rgba(5, 150, 105, 0.04) !important; }
+[data-theme="light"] .table-row-restarting { background: rgba(217, 119, 6, 0.04) !important; }
+[data-theme="light"] .table-row-stopped    { background: rgba(220, 38, 38, 0.03) !important; }
+[data-theme="light"] .table-base tbody tr:hover {
+  background: rgba(var(--c-surface-hv), 0.7) !important;
+}
+[data-theme="light"] .table-base thead {
+  border-color: rgba(var(--c-border), 0.6) !important;
+}
+[data-theme="light"] .table-base tbody tr {
+  border-color: rgba(var(--c-border), 0.35) !important;
+}
+
+/* ── Log output: keep it slightly tinted for readability ── */
+[data-theme="light"] .log-output {
+  background: rgba(var(--c-bg2), 0.55) !important;
+  border-color: rgba(var(--c-border), 0.55) !important;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.04) !important;
+}
+
+/* ── Input: cleaner border + focus ring on light ── */
+[data-theme="light"] .input,
+[data-theme="light"] .textarea {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(var(--c-border), 0.75) !important;
+}
+[data-theme="light"] .input:focus,
+[data-theme="light"] .textarea:focus {
+  border-color: rgba(var(--c-accent), 0.55) !important;
+  box-shadow: 0 0 0 3px rgba(var(--c-accent), 0.10) !important;
+}
+
+/* ── Submodule status badges in BranchTab ── */
+[data-theme="light"] .bg-green-900\/40  { background-color: rgba(5,150,105,0.09) !important; }
+[data-theme="light"] .bg-amber-900\/40  { background-color: rgba(217,119,6,0.09) !important; }
+[data-theme="light"] .bg-red-900\/40    { background-color: rgba(220,38,38,0.09) !important; }
+
+/* ── surface-hover on branch list items ── */
+[data-theme="light"] .hover\:bg-surface-hover\/50:hover {
+  background-color: rgba(var(--c-surface-hv), 0.65) !important;
+}
+
+/* ── Scrollbar: light-mode tint ── */
+[data-theme="light"] ::-webkit-scrollbar { width: 6px; height: 6px; }
+[data-theme="light"] ::-webkit-scrollbar-track { background: rgba(var(--c-bg2), 0.4); }
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(var(--c-border), 0.8);
+  border-radius: 3px;
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--c-accent), 0.45);
+}
+
+/* ── CodeMirror dark theme ──────────────────────────────────────── */
 .cm-editor {
   @apply rounded-lg text-sm font-mono;
   background: #0a0c12 !important;

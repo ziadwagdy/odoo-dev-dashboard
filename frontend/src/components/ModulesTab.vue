@@ -181,6 +181,7 @@
 </template>
 
 <script setup lang="ts">
+import { api } from '@/api'
 import { ref, computed, watch, nextTick } from 'vue'
 
 const props = defineProps<{ projectName: string; active: boolean }>()
@@ -261,7 +262,7 @@ function selectPending() {
 
 watch(() => props.active, async (v) => {
   if (v && !dbs.value.length) {
-    const res  = await fetch(`/api/db/${props.projectName}/list`)
+    const res  = await api(`/api/db/${props.projectName}/list`)
     const data = await res.json()
     dbs.value  = (data.databases || []).map((d: { name: string }) => d.name)
   }
@@ -273,7 +274,7 @@ async function loadModules() {
   selectedModules.value.clear()
   doneModules.value.clear()
   failedModules.value.clear()
-  const res  = await fetch(`/api/modules/${props.projectName}/${selectedDb.value}`)
+  const res  = await api(`/api/modules/${props.projectName}/${selectedDb.value}`)
   const data = await res.json()
   loading.value = false
   if (data.error) { error.value = data.error; return }
@@ -293,7 +294,7 @@ async function updateSelected() {
 
   // Update all selected modules in one call (comma-joined)
   const modList = mods.join(',')
-  const res  = await fetch(`/api/modules/${props.projectName}/${selectedDb.value}/update/${modList}`, { method: 'POST' })
+  const res  = await api(`/api/modules/${props.projectName}/${selectedDb.value}/update/${modList}`, { method: 'POST' })
   const data = await res.json()
 
   if (!data.ok) {
@@ -343,7 +344,7 @@ async function updateAll() {
   failedModules.value.clear()
   updatingModules.value = new Set(['all'])
 
-  const res  = await fetch(`/api/modules/${props.projectName}/${selectedDb.value}/update/all`, { method: 'POST' })
+  const res  = await api(`/api/modules/${props.projectName}/${selectedDb.value}/update/all`, { method: 'POST' })
   const data = await res.json()
 
   if (!data.ok) {

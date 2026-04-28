@@ -44,10 +44,24 @@ import { onMounted } from 'vue'
 import { RouterView } from 'vue-router'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useConfigStore } from '@/stores/config'
+import { useProjectsStore } from '@/stores/projects'
+import { useAuthStore } from '@/stores/auth'
+import { useThemeStore } from '@/stores/theme'
 
 const notifications = useNotificationsStore()
 const config = useConfigStore()
-onMounted(() => config.init())
+const auth = useAuthStore()
+// Initialise theme store — applies data-theme attribute immediately
+useThemeStore()
+
+onMounted(async () => {
+  // Config endpoint is public — load it regardless of auth state
+  await config.init()
+  // Fetch projects if already authenticated (restores state after page refresh)
+  if (auth.isAuthenticated) {
+    useProjectsStore().fetchProjects()
+  }
+})
 </script>
 
 <style>

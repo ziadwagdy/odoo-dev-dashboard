@@ -24,7 +24,8 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 from services.registry import read_registry
-from services.git_service import git_pull, get_current_commit
+from services.git_service import git_pull, get_current_commit, get_current_branch, get_remote_repo_name
+from services.docker_service import restart_container
 from state import deploy_queues, get_deploy_lock
 from apps.projects.models import DeployHistory, AuditLog
 
@@ -68,63 +69,89 @@ def github_webhook(request):
     if not repo_name or not pushed_branch:
         return JsonResponse({'ok': True, 'skipped': 'no repo or branch'})
 
-    # Find matching project in registry by folder name or project name
-    projects = {p['name']: p for p in read_registry()}
-    matched = None
-    for p in projects.values():
-        folder = (p.get('folder') or '').rstrip('/')
-        folder_name = folder.split('/')[-1].lower()
-        if folder_name == repo_name or p['name'].lower() == repo_name:
-            matched = p
-            break
+    # Find ALL projects whose git remote matches the pushed repo
+    all_projects = read_registry()
+    matched = [
+        p for p in all_projects
+        if p.get('folder') and get_remote_repo_name(p['folder']) == repo_name
+    ]
 
     if not matched:
         logger.info(f'GitHub webhook: no project matched repo={repo_name}')
         return JsonResponse({'ok': True, 'skipped': f'no project for repo={repo_name}'})
 
-    project_name = matched['name']
-    folder = matched.get('folder')
-    if not folder:
-        return JsonResponse({'ok': True, 'skipped': 'project has no folder'})
+    # Filter to only worktrees currently on the pushed branch
+    deployable = []
+    for p in matched:
+        current = get_current_branch(p['folder'])
+        if current == pushed_branch:
+            deployable.append(p)
+        else:
+            logger.info(
+                f'GitHub webhook: skipping {p["name"]} '
+                f'(on {current!r}, push was to {pushed_branch!r})'
+            )
 
-    # Acquire deploy lock (non-blocking — skip if already deploying)
-    lock = get_deploy_lock(project_name)
-    if not lock.acquire(blocking=False):
-        return JsonResponse({'ok': True, 'skipped': 'deploy already in progress'})
+    if not deployable:
+        return JsonResponse({'ok': True, 'skipped': f'no worktrees on branch={pushed_branch}'})
 
-    prev_commit = get_current_commit(folder)
-    q = queue.Queue()
-    deploy_queues[project_name] = q
-    started_at = time.time()
+    # Spawn one deploy thread per matching project
+    triggered = []
+    for p in deployable:
+        project_name = p['name']
+        folder       = p['folder']
+        container    = p['container']
 
-    def _run():
-        outcome = 'success'
-        try:
-            git_pull(folder, q)
-        except Exception as e:
-            logger.error(f'Webhook deploy failed for {project_name}: {e}')
-            outcome = 'failed'
-        finally:
-            new_commit = get_current_commit(folder)
-            duration = round(time.time() - started_at, 1)
+        lock = get_deploy_lock(project_name)
+        if not lock.acquire(blocking=False):
+            logger.info(f'GitHub webhook: deploy already in progress for {project_name}, skipping')
+            continue
+
+        prev_commit = get_current_commit(folder)
+        q = queue.Queue()
+        deploy_queues[project_name] = q
+        started_at = time.time()
+
+        def _run(project_name=project_name, folder=folder, container=container,
+                 prev_commit=prev_commit, q=q, started_at=started_at, lock=lock):
+            outcome = 'success'
             try:
-                DeployHistory.objects.create(
-                    project=project_name, trigger_type='webhook',
-                    prev_commit=prev_commit, new_commit=new_commit,
-                    outcome=outcome, duration_seconds=duration,
-                )
-            except Exception:
-                pass
-            try:
-                AuditLog.objects.create(
-                    project=project_name, action='deploy',
-                    detail=f'webhook push {pushed_branch} {(prev_commit or "")[:7]}→{(new_commit or "")[:7]}',
-                    outcome=outcome,
-                )
-            except Exception:
-                pass
-            lock.release()
+                exit_code = git_pull(folder, q)
+                if exit_code != 0:
+                    outcome = 'failed'
+                else:
+                    try:
+                        restart_container(container)
+                        q.put(f'--- container {container} restarted ---')
+                    except Exception as e:
+                        logger.error(f'Webhook: restart failed for {container}: {e}')
+                        outcome = 'failed'
+            except Exception as e:
+                logger.error(f'Webhook deploy failed for {project_name}: {e}')
+                outcome = 'failed'
+            finally:
+                new_commit = get_current_commit(folder)
+                duration = round(time.time() - started_at, 1)
+                try:
+                    DeployHistory.objects.create(
+                        project=project_name, trigger_type='webhook',
+                        prev_commit=prev_commit, new_commit=new_commit,
+                        outcome=outcome, duration_seconds=duration,
+                    )
+                except Exception:
+                    pass
+                try:
+                    AuditLog.objects.create(
+                        project=project_name, action='deploy',
+                        detail=f'webhook push {pushed_branch} {(prev_commit or "")[:7]}→{(new_commit or "")[:7]}',
+                        outcome=outcome,
+                    )
+                except Exception:
+                    pass
+                lock.release()
 
-    threading.Thread(target=_run, daemon=True).start()
-    logger.info(f'GitHub webhook: triggered deploy for {project_name} (branch={pushed_branch})')
-    return JsonResponse({'ok': True, 'project': project_name})
+        threading.Thread(target=_run, daemon=True).start()
+        logger.info(f'GitHub webhook: triggered deploy for {project_name} (branch={pushed_branch})')
+        triggered.append(project_name)
+
+    return JsonResponse({'ok': True, 'triggered': triggered})

@@ -1,18 +1,9 @@
 <template>
-  <div class="max-w-4xl mx-auto px-4 md:px-6 py-6 md:py-10">
-    <!-- Header -->
-    <div class="flex flex-col sm:flex-row sm:items-center gap-3 md:gap-4 mb-6 md:mb-10">
-      <RouterLink to="/" class="btn btn-ghost btn-sm">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-        </svg>
-        Dashboard
-      </RouterLink>
-      <div class="hidden sm:block h-6 w-px bg-border"></div>
-      <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-white to-accent-light bg-clip-text text-transparent">
-        Onboard New Project
-      </h1>
-    </div>
+  <SidebarLayout>
+    <template #breadcrumb>
+      <Breadcrumb :crumbs="[{ label: 'New Project' }]" />
+    </template>
+    <div class="max-w-4xl">
 
     <!-- Step Indicator -->
     <div class="flex items-center justify-center mb-8 gap-2 md:gap-4">
@@ -38,7 +29,7 @@
     <!-- Step 1: Project Details -->
     <div v-if="currentStep === 1" class="card">
       <h2 class="text-xl font-bold mb-6 text-white">Project Details</h2>
-      
+
       <div class="space-y-4">
         <div>
           <label class="block text-sm font-semibold text-slate-300 mb-2">Project Name</label>
@@ -54,16 +45,40 @@
         </div>
 
         <div>
-          <label class="block text-sm font-semibold text-slate-300 mb-2">GitHub Repository URL</label>
+          <label class="block text-sm font-semibold text-slate-300 mb-2">
+            Repository URL
+            <span class="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-amber-500/15 text-amber-400 border border-amber-500/30">
+              SSH only
+            </span>
+          </label>
           <input
             v-model="form.repoUrl"
             type="text"
             placeholder="git@github.com:ORG/REPO.git"
             class="w-full px-4 py-3 rounded-lg bg-surface border border-border text-white placeholder-slate-500 focus:outline-none focus:border-accent transition-colors font-mono text-sm"
-            :class="errors.repoUrl ? 'border-red-500' : ''"
+            :class="errors.repoUrl ? 'border-red-500' : (repoUrlValid ? 'border-emerald-500/60' : '')"
           />
           <p v-if="errors.repoUrl" class="mt-1 text-sm text-red-400">{{ errors.repoUrl }}</p>
-          <p class="mt-1 text-xs text-slate-500">SSH format required (git@github.com:...)</p>
+          <div v-else class="mt-1.5 flex items-center gap-1.5">
+            <template v-if="form.repoUrl && !repoUrlValid">
+              <svg class="w-3.5 h-3.5 text-red-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+              <span class="text-xs text-red-400">Must be SSH format — <code class="font-mono">git@github.com:ORG/REPO.git</code></span>
+            </template>
+            <template v-else-if="repoUrlValid">
+              <svg class="w-3.5 h-3.5 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+              </svg>
+              <span class="text-xs text-emerald-400">Valid SSH URL</span>
+            </template>
+            <template v-else>
+              <svg class="w-3.5 h-3.5 text-slate-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <span class="text-xs text-slate-500">HTTPS URLs won't work — use the SSH clone URL from GitHub</span>
+            </template>
+          </div>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -75,6 +90,7 @@
               :class="errors.version ? 'border-red-500' : ''"
             >
               <option value="">Select version...</option>
+              <option value="15">Odoo 15</option>
               <option value="17">Odoo 17</option>
               <option value="18">Odoo 18</option>
               <option value="19">Odoo 19</option>
@@ -108,11 +124,17 @@
                 <div class="text-xs text-slate-400">Project does not use hr-base modules</div>
               </div>
             </label>
-            <label class="flex items-start gap-3 p-3 rounded-lg bg-surface-hover border border-border cursor-pointer hover:border-accent/50 transition-colors">
-              <input type="radio" v-model="form.hrBaseMode" value="yes-mount" class="mt-1" />
+            <label
+              class="flex items-start gap-3 p-3 rounded-lg bg-surface-hover border border-border transition-colors"
+              :class="form.version === '15' ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-accent/50'"
+            >
+              <input type="radio" v-model="form.hrBaseMode" value="yes-mount" class="mt-1" :disabled="form.version === '15'" />
               <div>
                 <div class="font-medium text-white">Yes - Mount worktree</div>
-                <div class="text-xs text-slate-400">Project uses hr-base modules from hr-base repository</div>
+                <div class="text-xs text-slate-400">
+                  <span v-if="form.version === '15'">Not available for Odoo 15 — no hr-base v15 branch</span>
+                  <span v-else>Project uses hr-base modules from hr-base repository</span>
+                </div>
               </div>
             </label>
             <label class="flex items-start gap-3 p-3 rounded-lg bg-surface-hover border border-border cursor-pointer hover:border-accent/50 transition-colors">
@@ -137,7 +159,7 @@
     <!-- Step 2: Confirmation -->
     <div v-if="currentStep === 2" class="card">
       <h2 class="text-xl font-bold mb-6 text-white">Confirm Configuration</h2>
-      
+
       <div class="space-y-4 mb-6">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="p-4 rounded-lg bg-surface-hover border border-border">
@@ -155,7 +177,7 @@
           <div class="p-4 rounded-lg bg-surface-hover border border-border">
             <div class="text-xs text-slate-400 mb-1">HR Base</div>
             <div class="text-white font-semibold">
-              {{ form.hrBaseMode === 'no' ? 'Not used' : 
+              {{ form.hrBaseMode === 'no' ? 'Not used' :
                  form.hrBaseMode === 'yes-mount' ? 'Mounted' : 'Included' }}
             </div>
           </div>
@@ -191,70 +213,47 @@
     </div>
 
     <!-- Step 3: Progress -->
-    <div v-if="currentStep === 3" class="card">
-      <h2 class="text-xl font-bold mb-6 text-white">Onboarding in Progress</h2>
-      
-      <div class="space-y-3 mb-6">
-        <div v-for="(line, idx) in progressLines" :key="idx"
-          class="p-3 rounded-lg text-sm font-mono"
-          :class="line.error ? 'bg-red-500/10 text-red-400 border border-red-500/30' :
-                  line.success ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' :
-                  line.warning ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30' :
-                  'bg-surface-hover text-slate-300'"
-        >
-          {{ line.text }}
-        </div>
+    <div v-if="currentStep === 3">
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-xl font-bold text-white">
+          {{ onboardingComplete ? 'Onboarding Complete' : onboardingError ? 'Onboarding Failed' : 'Onboarding…' }}
+        </h2>
+        <button v-if="onboardingComplete || onboardingError" @click="resetForm" class="btn btn-ghost btn-sm text-xs">
+          Start Over
+        </button>
       </div>
 
-      <div v-if="!onboardingComplete" class="text-center py-4">
-        <div class="inline-block w-8 h-8 border-3 border-accent/30 border-t-accent rounded-full animate-spin"></div>
-        <p class="text-sm text-slate-400 mt-3">Please wait...</p>
-      </div>
+      <OnboardProgress :events="events" :project-name="form.projectName" />
 
-      <div v-if="onboardingComplete && !onboardingError" class="text-center py-6">
-        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-500/20 border-2 border-emerald-500 flex items-center justify-center">
-          <svg class="w-8 h-8 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-          </svg>
-        </div>
-        <h3 class="text-xl font-bold text-emerald-400 mb-2">Onboarding Complete!</h3>
-        <p class="text-slate-400 mb-6">
-          Your project is now accessible at 
-          <a :href="`https://${form.subdomain}.zedev.org`" target="_blank" class="text-accent hover:underline">
-            https://{{ form.subdomain }}.zedev.org
-          </a>
-        </p>
-        <div class="flex justify-center gap-3">
-          <RouterLink to="/" class="btn btn-primary">View Dashboard</RouterLink>
-          <RouterLink :to="`/project/${form.projectName}`" class="btn btn-ghost">View Project</RouterLink>
-        </div>
-      </div>
-
-      <div v-if="onboardingError" class="text-center py-6">
-        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/20 border-2 border-red-500 flex items-center justify-center">
-          <svg class="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-          </svg>
-        </div>
-        <h3 class="text-xl font-bold text-red-400 mb-2">Onboarding Failed</h3>
-        <p class="text-slate-400 mb-6">An error occurred during onboarding. Please check the logs above.</p>
-        <button @click="resetForm" class="btn btn-primary">Start Over</button>
+      <!-- waiting indicator (while in progress) -->
+      <div v-if="!onboardingComplete && !onboardingError" class="flex items-center justify-center gap-3 mt-5 text-slate-500 text-sm">
+        <div class="w-4 h-4 rounded-full border-2 border-accent/30 border-t-accent animate-spin shrink-0"/>
+        Please wait — this can take a few minutes for the Docker build…
       </div>
     </div>
-  </div>
+
+    </div>
+  </SidebarLayout>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
-import { RouterLink } from 'vue-router'
+import { api } from '@/api'
+import { ref, reactive, computed, watch } from 'vue'
+import SidebarLayout from '@/layouts/SidebarLayout.vue'
+import Breadcrumb from '@/components/Breadcrumb.vue'
+import OnboardProgress from '@/components/OnboardProgress.vue'
+import type { OnboardEvent } from '@/types/onboard'
 
+// ──────────────────────────────────────────────────────────────────
+// SINGLE-INSTANCE state
+// ──────────────────────────────────────────────────────────────────
 const currentStep = ref(1)
 const validating = ref(false)
 const onboarding = ref(false)
 const onboardingComplete = ref(false)
 const onboardingError = ref(false)
 const assignedPorts = ref<{odoo_port: number, db_port: number} | null>(null)
-const progressLines = ref<Array<{text: string, error?: boolean, success?: boolean, warning?: boolean}>>([])
+const events = ref<OnboardEvent[]>([])
 
 const steps = [
   { id: 1, label: 'Details' },
@@ -277,43 +276,29 @@ const errors = reactive({
   subdomain: '',
 })
 
+const SSH_RE = /^git@[a-zA-Z0-9._-]+:[a-zA-Z0-9._/-]+\/[a-zA-Z0-9._-]+\.git$/
+const repoUrlValid = computed(() => SSH_RE.test(form.repoUrl.trim()))
+
+watch(() => form.version, (v) => {
+  if (v === '15' && form.hrBaseMode === 'yes-mount') form.hrBaseMode = 'no'
+})
+
 async function validateAndProceed() {
-  // Clear errors
   Object.keys(errors).forEach(k => (errors as any)[k] = '')
-  
-  // Basic client validation
-  if (!form.projectName) {
-    errors.projectName = 'Project name is required'
-    return
-  }
-  if (!form.repoUrl) {
-    errors.repoUrl = 'Repository URL is required'
-    return
-  }
-  if (!form.version) {
-    errors.version = 'Odoo version is required'
-    return
-  }
-  if (!form.subdomain) {
-    errors.subdomain = 'Subdomain is required'
-    return
-  }
-  
-  // Server validation
+  if (!form.projectName) { errors.projectName = 'Project name is required'; return }
+  if (!form.repoUrl)     { errors.repoUrl = 'Repository URL is required'; return }
+  if (!repoUrlValid.value) { errors.repoUrl = 'Must be SSH format: git@github.com:ORG/REPO.git'; return }
+  if (!form.version)     { errors.version = 'Odoo version is required'; return }
+  if (!form.subdomain)   { errors.subdomain = 'Subdomain is required'; return }
+
   validating.value = true
   try {
-    const response = await fetch('/api/onboard/validate', {
+    const response = await api('/api/onboard/validate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        project_name: form.projectName,
-        subdomain: form.subdomain,
-        version: form.version,
-      }),
+      body: JSON.stringify({ project_name: form.projectName, subdomain: form.subdomain, version: form.version }),
     })
-    
     const data = await response.json()
-    
     if (!data.valid) {
       Object.keys(data.errors).forEach(key => {
         if (key === 'project_name') errors.projectName = data.errors[key]
@@ -322,7 +307,6 @@ async function validateAndProceed() {
       })
       return
     }
-    
     assignedPorts.value = data.assigned_ports
     currentStep.value = 2
   } catch (error: any) {
@@ -335,10 +319,9 @@ async function validateAndProceed() {
 async function startOnboarding() {
   onboarding.value = true
   currentStep.value = 3
-  progressLines.value = []
-  
+  events.value = []
   try {
-    const response = await fetch('/api/onboard/start', {
+    const response = await api('/api/onboard/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -347,53 +330,39 @@ async function startOnboarding() {
         version: form.version,
         subdomain: form.subdomain,
         hr_base_mode: form.hrBaseMode,
+        odoo_port: assignedPorts.value?.odoo_port,
+        db_port: assignedPorts.value?.db_port,
       }),
     })
-    
     const data = await response.json()
-    
     if (!data.success) {
-      progressLines.value.push({ text: `ERROR: ${data.error}`, error: true })
+      events.value.push({ type: 'log', text: `Error: ${data.error}`, error: true })
+      events.value.push({ type: 'done', success: false })
       onboardingError.value = true
       onboarding.value = false
       return
     }
-    
-    // Start SSE stream
-    const eventSource = new EventSource(`/stream/onboard/${form.projectName}`)
-    
-    eventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data)
-      
-      if (data.line) {
-        progressLines.value.push({
-          text: data.line,
-          error: data.error,
-          success: data.success,
-          warning: data.warning,
-        })
-      }
-      
-      if (data.done) {
+    const eventSource = new EventSource(`/api/onboard/stream/${form.projectName}`)
+    eventSource.onmessage = (ev) => {
+      const e: OnboardEvent = JSON.parse(ev.data)
+      events.value.push(e)
+      if (e.type === 'done') {
         eventSource.close()
         onboarding.value = false
-        
-        if (data.error || progressLines.value.some(l => l.error)) {
-          onboardingError.value = true
-        } else {
-          onboardingComplete.value = true
-        }
+        if (e.success) onboardingComplete.value = true
+        else           onboardingError.value = true
       }
     }
-    
     eventSource.onerror = () => {
       eventSource.close()
-      progressLines.value.push({ text: 'ERROR: Connection lost', error: true })
+      events.value.push({ type: 'log', text: 'Connection lost', error: true })
+      events.value.push({ type: 'done', success: false })
       onboardingError.value = true
       onboarding.value = false
     }
   } catch (error: any) {
-    progressLines.value.push({ text: `ERROR: ${error.message}`, error: true })
+    events.value.push({ type: 'log', text: error.message, error: true })
+    events.value.push({ type: 'done', success: false })
     onboardingError.value = true
     onboarding.value = false
   }
@@ -403,8 +372,10 @@ function resetForm() {
   currentStep.value = 1
   onboardingComplete.value = false
   onboardingError.value = false
-  progressLines.value = []
+  events.value = []
   Object.keys(form).forEach(k => (form as any)[k] = k === 'hrBaseMode' ? 'no' : '')
   Object.keys(errors).forEach(k => (errors as any)[k] = '')
 }
+
+
 </script>

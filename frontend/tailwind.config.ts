@@ -5,22 +5,25 @@ export default {
   theme: {
     extend: {
       colors: {
-        bg: '#0f0b14',
-        'bg-secondary': '#1a1420',
-        surface: '#251b2f',
-        'surface-hover': '#2d2138',
-        border: '#3d2d4a',
-        'border-hover': '#4d3d5a',
-        accent: '#a24689',
-        'accent-hover': '#875a7b',
-        'accent-light': '#c95fb5',
-        primary: '#714b67',
-        'primary-dark': '#5d3d56',
-        success: '#10b981',
-        warning: '#f59e0b',
-        danger: '#ef4444',
+        // All theme colors reference CSS variables (RGB triplets) so opacity
+        // modifiers like bg-surface/80 continue to work correctly.
+        bg:               'rgb(var(--c-bg)         / <alpha-value>)',
+        'bg-secondary':   'rgb(var(--c-bg2)        / <alpha-value>)',
+        surface:          'rgb(var(--c-surface)    / <alpha-value>)',
+        'surface-hover':  'rgb(var(--c-surface-hv) / <alpha-value>)',
+        border:           'rgb(var(--c-border)     / <alpha-value>)',
+        'border-hover':   'rgb(var(--c-border-hv)  / <alpha-value>)',
+        accent:           'rgb(var(--c-accent)     / <alpha-value>)',
+        'accent-hover':   'rgb(var(--c-accent-hv)  / <alpha-value>)',
+        'accent-light':   'rgb(var(--c-accent-lt)  / <alpha-value>)',
+        primary:          'rgb(var(--c-primary)    / <alpha-value>)',
+        'primary-dark':   'rgb(var(--c-primary-dk) / <alpha-value>)',
+        success:          '#10b981',
+        warning:          '#f59e0b',
+        danger:           '#ef4444',
       },
       fontFamily: {
+        sans: ['IBM Plex Sans', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
       },
       backgroundImage: {
@@ -31,7 +34,7 @@ export default {
       },
       boxShadow: {
         'glow-sm': '0 0 10px rgba(162, 70, 137, 0.3)',
-        'glow': '0 0 20px rgba(162, 70, 137, 0.4)',
+        'glow':    '0 0 20px rgba(162, 70, 137, 0.4)',
         'glow-lg': '0 0 30px rgba(162, 70, 137, 0.5)',
         'inner-glow': 'inset 0 0 20px rgba(162, 70, 137, 0.1)',
       }

@@ -88,7 +88,11 @@ def _ensure_ipykernel(container_name: str, status_callback) -> None:
         status_callback('ipykernel already installed')
         return
     status_callback('ipykernel not found — installing via pip (may take 30–60 s)…')
-    result = c.exec_run('pip install ipykernel --quiet --break-system-packages', stream=False)
+    result = c.exec_run(
+        'sh -c "pip3 install ipykernel --quiet --no-cache-dir --break-system-packages 2>/dev/null '
+        '|| pip3 install ipykernel --quiet --no-cache-dir"',
+        stream=False,
+    )
     if result.exit_code != 0:
         raise RuntimeError(f'pip install ipykernel failed:\n{result.output.decode(errors="replace")}')
     status_callback('ipykernel installed successfully')

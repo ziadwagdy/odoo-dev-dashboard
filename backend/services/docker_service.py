@@ -33,6 +33,12 @@ def stop_container(name):
     container.stop()
 
 
+def start_container(name):
+    client = get_docker_client()
+    container = client.containers.get(name)
+    container.start()
+
+
 def get_container_stats(name):
     try:
         client = get_docker_client()
@@ -49,10 +55,10 @@ def get_container_stats(name):
         num_cpus = stats['cpu_stats'].get('online_cpus') or len(
             stats['cpu_stats']['cpu_usage'].get('percpu_usage', [1])
         )
-        cpu_pct = (cpu_delta / sys_delta) * num_cpus * 100.0 if sys_delta > 0 else 0.0
-        
-        # Debug logging
-        print(f"[{name}] cpu_delta={cpu_delta}, sys_delta={sys_delta}, cpu%={cpu_pct:.1f}")
+        if sys_delta <= 0 or cpu_delta < 0:
+            cpu_pct = 0.0
+        else:
+            cpu_pct = min((cpu_delta / sys_delta) * num_cpus * 100.0, 100.0)
         
         mem = stats['memory_stats']
         mem_used = mem.get('usage', 0) - mem.get('stats', {}).get('cache', 0)

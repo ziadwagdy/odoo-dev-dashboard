@@ -141,6 +141,7 @@ def drop_database(db_port, dbname):
 def _parse_volume_mappings(compose_path, odoo_dev_base):
     if not os.path.exists(compose_path):
         return {}
+    compose_dir = os.path.dirname(os.path.abspath(compose_path))
     with open(compose_path) as f:
         content = f.read()
     host_home = os.path.dirname(odoo_dev_base)
@@ -151,6 +152,8 @@ def _parse_volume_mappings(compose_path, odoo_dev_base):
         host = m.group(1).strip()
         container = m.group(2).strip()
         if container.startswith('/mnt/'):
+            if not os.path.isabs(host):
+                host = os.path.normpath(os.path.join(compose_dir, host))
             mappings[container] = host
     return mappings
 

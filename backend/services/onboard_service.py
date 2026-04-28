@@ -1,165 +1,241 @@
 import os
+import secrets
 import subprocess
 import shutil
 from pathlib import Path
 
+from django.conf import settings
+
 from services.registry import read_registry
 
 
-ODOO_DEV_BASE = os.environ.get('ODOO_DEV_BASE', '/srv/odoo-dev')
-PROJECTS_DIR = f'{ODOO_DEV_BASE}/projects'
+ODOO_DEV_BASE = os.environ.get('ODOO_DEV_BASE', '/home/zeyad/odoo-dev')
 WORKTREES_DIR = f'{ODOO_DEV_BASE}/worktrees'
 
 
+# ── helpers ──────────────────────────────────────────────────────────
+
+def _log(emit, text, error=False):
+    emit({'type': 'log', 'text': text, 'error': error})
+
+
+def _get_docker_used_ports() -> set:
+    """Return all host ports reserved by Docker — running containers AND compose files.
+
+    Scanning only running containers misses ports claimed by stopped containers,
+    which causes collisions when a container is temporarily down during onboarding.
+    """
+    import re
+    used = set()
+
+    # Source 1: running containers via Docker socket
+    try:
+        import docker
+        client = docker.from_env()
+        for container in client.containers.list():
+            for bindings in (container.ports or {}).values():
+                if bindings:
+                    for b in bindings:
+                        try:
+                            used.add(int(b['HostPort']))
+                        except (KeyError, ValueError, TypeError):
+                            pass
+    except Exception:
+        pass
+
+    # Source 2: all docker-compose.yml files (catches stopped/removed containers)
+    compose_port_re = re.compile(r'[\'"]\d+\.\d+\.\d+\.\d+:(\d+):\d+[\'"]|[\'"](\d+):\d+[\'"]')
+    try:
+        for compose_file in Path(ODOO_DEV_BASE).glob('*/docker-compose.yml'):
+            text = compose_file.read_text()
+            for m in compose_port_re.finditer(text):
+                host_port = m.group(1) or m.group(2)
+                if host_port:
+                    try:
+                        used.add(int(host_port))
+                    except ValueError:
+                        pass
+    except Exception:
+        pass
+
+    return used
+
+
+# ── validation ───────────────────────────────────────────────────────
+
 def get_next_ports():
-    """Determine next available Odoo and DB ports from registry."""
     projects = read_registry()
-    
-    used_odoo_ports = {int(p['odoo_port']) for p in projects if p.get('odoo_port')}
-    used_db_ports = {int(p['db_port']) for p in projects if p.get('db_port')}
-    
-    # Start from 8072 for Odoo, 15433 for DB
+    used_odoo = {int(p['odoo_port']) for p in projects if p.get('odoo_port')}
+    used_db   = {int(p['db_port'])   for p in projects if p.get('db_port')}
+
+    # Also account for ports already bound on the host by running containers
+    # (the registry may not yet list a container that's already up)
+    docker_ports = _get_docker_used_ports()
+    used_odoo |= docker_ports
+    used_db   |= docker_ports
+
     odoo_port = 8072
-    while odoo_port in used_odoo_ports:
+    while odoo_port in used_odoo:
         odoo_port += 1
-    
+
     db_port = 15433
-    while db_port in used_db_ports:
+    while db_port in used_db:
         db_port += 1
-    
+
     return odoo_port, db_port
 
 
 def check_project_exists(project_name):
-    """Check if project directory already exists."""
-    project_dir = Path(PROJECTS_DIR) / project_name
-    return project_dir.exists()
+    return (Path(ODOO_DEV_BASE) / project_name).exists()
 
 
 def check_worktrees_exist(version):
-    """Verify worktrees exist for given Odoo version."""
-    hr_base = Path(WORKTREES_DIR) / f'hr-base-{version}'
     enterprise = Path(WORKTREES_DIR) / f'enterprise-{version}'
-    
-    return hr_base.exists() and enterprise.exists()
+    if not enterprise.exists():
+        return False
+    hr_base = Path(WORKTREES_DIR) / f'hr-base-{version}'
+    # hr-base is optional — not every Odoo version has a matching branch
+    # v15 only has enterprise; yes-mount will be blocked in the UI for those versions
+    return True
+
+
+def hr_base_worktree_exists(version):
+    return (Path(WORKTREES_DIR) / f'hr-base-{version}').exists()
 
 
 def validate_project_name(name):
-    """Validate project name (slug format)."""
     if not name:
-        return False, "Project name is required"
+        return False, 'Project name is required'
     if not name.replace('-', '').replace('_', '').isalnum():
-        return False, "Project name must be alphanumeric with hyphens/underscores"
+        return False, 'Project name must be alphanumeric with hyphens/underscores'
     if ' ' in name:
-        return False, "Project name cannot contain spaces"
+        return False, 'Project name cannot contain spaces'
     return True, None
 
 
 def validate_subdomain(subdomain):
-    """Validate subdomain format."""
     if not subdomain:
-        return False, "Subdomain is required"
+        return False, 'Subdomain is required'
     if not subdomain.replace('-', '').isalnum():
-        return False, "Subdomain must be alphanumeric with hyphens"
+        return False, 'Subdomain must be alphanumeric with hyphens'
     return True, None
 
 
-def clone_repository(repo_url, project_name, progress_callback):
-    """Clone git repository with submodules."""
-    project_dir = Path(PROJECTS_DIR) / project_name
-    repo_dir = project_dir / 'repo'
-    
+# ── onboarding steps ─────────────────────────────────────────────────
+
+def cleanup_project(project_name, emit):
+    """Remove a partial project directory after a failed onboard."""
+    project_dir = Path(ODOO_DEV_BASE) / project_name
+    if not project_dir.exists():
+        return
+    try:
+        # Repo files may be owned by the odoo Docker user — use chmod first
+        subprocess.run(['chmod', '-R', '777', str(project_dir)], capture_output=True)
+        shutil.rmtree(str(project_dir))
+        _log(emit, f'Cleaned up partial project directory')
+    except Exception as e:
+        _log(emit, f'Could not auto-clean {project_dir}: {e} — remove it manually with: sudo rm -rf {project_dir}', error=True)
+
+
+def clone_repository(repo_url, project_name, emit):
+    project_dir = Path(ODOO_DEV_BASE) / project_name
+    repo_dir    = project_dir / 'repo'
     try:
         project_dir.mkdir(parents=True, exist_ok=True)
-        
-        progress_callback(f"Cloning {repo_url}...")
+        _log(emit, f'Cloning {repo_url}…')
         result = subprocess.run(
             ['git', 'clone', '--recurse-submodules', repo_url, str(repo_dir)],
-            capture_output=True, text=True, timeout=300
+            capture_output=True, text=True, timeout=300,
         )
-        
         if result.returncode != 0:
-            raise Exception(f"Git clone failed: {result.stderr}")
-        
-        progress_callback("Repository cloned successfully")
-        
-        # Initialize submodules if any
+            raise Exception(f'Git clone failed: {result.stderr.strip()}')
+        _log(emit, 'Repository cloned successfully')
+
         if (repo_dir / '.gitmodules').exists():
-            progress_callback("Initializing submodules...")
+            _log(emit, 'Initialising submodules…')
             subprocess.run(
                 ['git', 'submodule', 'update', '--init', '--recursive'],
-                cwd=repo_dir, check=True, capture_output=True
+                cwd=repo_dir, check=True, capture_output=True,
             )
-            progress_callback("Submodules initialized")
-        
+            _log(emit, 'Submodules initialised')
+
         return True, str(repo_dir)
     except Exception as e:
         return False, str(e)
 
 
 def detect_addons(repo_dir):
-    """Find all addon directories containing __manifest__.py."""
     addons = []
-    repo_path = Path(repo_dir)
-    
-    for manifest in repo_path.rglob('__manifest__.py'):
-        addon_dir = manifest.parent
-        addons.append(str(addon_dir.relative_to(repo_path)))
-    
+    for manifest in Path(repo_dir).rglob('__manifest__.py'):
+        addons.append(str(manifest.parent.relative_to(repo_dir)))
     return sorted(addons)
 
 
 def build_addons_path(version, hr_base_mode):
-    """Build the addons_path string for odoo.conf."""
     parts = [
         '/usr/lib/python3/dist-packages/odoo/addons',
         '/mnt/enterprise-addons',
     ]
-    
     if hr_base_mode == 'yes-mount':
         parts.append('/mnt/hr-base-addons')
-    
     parts.append('/mnt/project-addons')
-    
     return ','.join(parts)
 
 
-def create_docker_stack(project_name, version, odoo_port, db_port, 
-                        addons_path, hr_base_mode, repo_dir, progress_callback):
-    """Create Docker Compose stack files."""
-    project_dir = Path(PROJECTS_DIR) / project_name
-    config_dir = project_dir / 'config'
+def create_docker_stack(project_name, version, odoo_port, db_port,
+                        addons_path, hr_base_mode, repo_dir, emit):
+    project_dir = Path(ODOO_DEV_BASE) / project_name
+    config_dir  = project_dir / 'config'
     config_dir.mkdir(exist_ok=True)
-    
-    # Copy requirements.txt if exists
-    requirements_src = Path(repo_dir) / 'requirements.txt'
-    requirements_dst = project_dir / 'requirements.txt'
-    
-    if requirements_src.exists():
-        shutil.copy(requirements_src, requirements_dst)
-        progress_callback(f"Copied requirements.txt")
+
+    # requirements.txt — merge from project repo AND mounted worktrees
+    req_dst = project_dir / 'requirements.txt'
+    scan_roots = [Path(repo_dir)]
+    if hr_base_mode in ('yes-mount', 'yes-included'):
+        hr_base_dir = Path(WORKTREES_DIR) / f'hr-base-{version}'
+        if hr_base_dir.exists():
+            scan_roots.append(hr_base_dir)
+
+    all_req_files = []
+    for root in scan_roots:
+        all_req_files.extend(sorted(root.rglob('requirements*.txt')))
+
+    if all_req_files:
+        seen, lines = set(), []
+        for req_file in all_req_files:
+            try:
+                for line in req_file.read_text(errors='replace').splitlines():
+                    stripped = line.strip()
+                    if stripped and not stripped.startswith('#') and stripped not in seen:
+                        seen.add(stripped)
+                        lines.append(stripped)
+            except Exception:
+                pass
+        req_dst.write_text('\n'.join(lines) + '\n' if lines else '')
+        _log(emit, f'Merged {len(all_req_files)} requirements file(s) from repo + worktrees → {len(lines)} package(s)')
     else:
-        requirements_dst.touch()
-        progress_callback("No requirements.txt found, created empty file")
-    
-    # Create Dockerfile
-    dockerfile_content = f"""FROM odoo:{version}.0
+        req_dst.touch()
+        _log(emit, 'No requirements.txt found — created empty file')
+
+    # Dockerfile
+    (project_dir / 'Dockerfile').write_text(f"""FROM odoo:{version}.0
 
 USER root
-
 COPY requirements.txt /tmp/requirements.txt
 RUN if [ -f /tmp/requirements.txt ] && [ -s /tmp/requirements.txt ]; then \\
       pip3 install --no-cache-dir --break-system-packages -r /tmp/requirements.txt 2>/dev/null || \\
       pip3 install --no-cache-dir -r /tmp/requirements.txt; \\
     fi
-
 USER odoo
-"""
-    (project_dir / 'Dockerfile').write_text(dockerfile_content)
-    progress_callback("Created Dockerfile")
-    
-    # Create odoo.conf
-    odoo_conf_content = f"""[options]
+""")
+    _log(emit, 'Created Dockerfile')
+
+    # admin_passwd
+    admin_passwd = secrets.token_urlsafe(12)
+
+    # odoo.conf
+    (config_dir / 'odoo.conf').write_text(f"""[options]
+admin_passwd = {admin_passwd}
 addons_path = {addons_path}
 data_dir = /var/lib/odoo
 
@@ -169,26 +245,38 @@ db_user = odoo
 db_password = odoo
 
 list_db = True
+proxy_mode = True
 max_cron_threads = 1
 log_level = info
-workers = 0
-"""
-    (config_dir / 'odoo.conf').write_text(odoo_conf_content)
-    progress_callback("Created odoo.conf")
-    
-    # Create docker-compose.yml
-    volumes_section = f"""    volumes:
-      - ./config:/etc/odoo:ro
-      - ./repo:/mnt/project-addons:ro
-      - ~/odoo-dev/worktrees/enterprise-{version}:/mnt/enterprise-addons:ro"""
-    
+workers = 2
+limit_time_cpu = 600
+limit_time_real = 1200
+""")
+    _log(emit, 'Created odoo.conf')
+
+    # Emit the password as a structured credential event — UI will show it prominently
+    emit({'type': 'credential', 'label': 'DB Manager master password', 'value': admin_passwd})
+
+    # PostgreSQL version
+    pg_version = {'15': '14', '17': '15'}.get(str(version), '16')
+
+    # Volume mounts (absolute paths — Docker doesn't expand ~)
+    volume_lines = [
+        f'      - ./config/odoo.conf:/etc/odoo/odoo.conf:ro',
+        f'      - app-data:/var/lib/odoo',
+        f'      - ./repo:/mnt/project-addons:ro',
+        f'      - {ODOO_DEV_BASE}/worktrees/enterprise-{version}:/mnt/enterprise-addons:ro',
+    ]
     if hr_base_mode == 'yes-mount':
-        volumes_section += f"""
-      - ~/odoo-dev/worktrees/hr-base-{version}:/mnt/hr-base-addons:ro"""
-    
-    docker_compose_content = f"""services:
+        volume_lines.append(
+            f'      - {ODOO_DEV_BASE}/worktrees/hr-base-{version}:/mnt/hr-base-addons:ro'
+        )
+
+    # docker-compose.yml
+    (project_dir / 'docker-compose.yml').write_text(f"""services:
   db-{project_name}:
-    image: postgres:15-alpine
+    image: postgres:{pg_version}-alpine
+    container_name: {project_name}-db
     restart: unless-stopped
     environment:
       POSTGRES_DB: postgres
@@ -197,7 +285,7 @@ workers = 0
     volumes:
       - db-data:/var/lib/postgresql/data
     ports:
-      - "{db_port}:5432"
+      - "172.17.0.1:{db_port}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U odoo"]
       interval: 10s
@@ -206,13 +294,15 @@ workers = 0
 
   {project_name}-app:
     build: .
+    container_name: {project_name}-app
     restart: unless-stopped
     depends_on:
       db-{project_name}:
         condition: service_healthy
     ports:
-      - "{odoo_port}:8069"
-{volumes_section}
+      - "127.0.0.1:{odoo_port}:8069"
+    volumes:
+{chr(10).join(volume_lines)}
     environment:
       - HOST=db-{project_name}
       - USER=odoo
@@ -220,123 +310,163 @@ workers = 0
 
 volumes:
   db-data:
-"""
-    (project_dir / 'docker-compose.yml').write_text(docker_compose_content)
-    progress_callback("Created docker-compose.yml")
-    
-    return True
+  app-data:
+""")
+    _log(emit, 'Created docker-compose.yml')
 
 
-def build_docker_image(project_name, progress_callback):
-    """Build Docker image."""
-    project_dir = Path(PROJECTS_DIR) / project_name
-    
-    progress_callback("Building Docker image...")
-    
+def build_docker_image(project_name, emit):
+    project_dir = Path(ODOO_DEV_BASE) / project_name
+    _log(emit, 'Starting build…')
     process = subprocess.Popen(
         ['docker', 'compose', 'build'],
         cwd=project_dir,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True,
     )
-    
     for line in process.stdout:
         line = line.strip()
         if line:
-            progress_callback(f"  {line}")
-    
+            emit({'type': 'log', 'text': line, 'phase': 'build'})
     process.wait()
-    
     if process.returncode != 0:
-        raise Exception(f"Docker build failed with code {process.returncode}")
-    
-    progress_callback("Docker image built successfully")
-    return True
+        raise Exception(f'Docker build failed with exit code {process.returncode}')
+    _log(emit, 'Docker image built successfully')
 
 
-def start_containers(project_name, progress_callback):
-    """Start Docker containers."""
-    project_dir = Path(PROJECTS_DIR) / project_name
-    
-    progress_callback("Starting containers...")
-    
+def start_containers(project_name, emit):
+    project_dir = Path(ODOO_DEV_BASE) / project_name
+    _log(emit, 'Bringing containers up…')
     result = subprocess.run(
         ['docker', 'compose', 'up', '-d'],
-        cwd=project_dir,
-        capture_output=True,
-        text=True
+        cwd=project_dir, capture_output=True, text=True,
     )
-    
     if result.returncode != 0:
-        raise Exception(f"Failed to start containers: {result.stderr}")
-    
-    progress_callback("Containers started successfully")
-    return True
+        raise Exception(f'docker compose up failed: {result.stderr.strip()}')
+    _log(emit, 'Containers started')
 
 
-def configure_cloudflare(subdomain, odoo_port, progress_callback):
-    """Add Cloudflare tunnel configuration."""
+def update_dozzle(project_name, emit):
+    """Add the new project's app container to Dozzle's filter and restart it."""
+    dozzle_compose = Path(ODOO_DEV_BASE) / 'dozzle' / 'docker-compose.yml'
+    if not dozzle_compose.exists():
+        _log(emit, 'Dozzle compose not found — skipping', error=False)
+        return
     try:
-        # Add DNS route
-        progress_callback(f"Configuring DNS for {subdomain}.zedev.org...")
-        subprocess.run(
-            ['cloudflared', 'tunnel', 'route', 'dns', 'odoo-dev', f'{subdomain}.zedev.org'],
-            check=True, capture_output=True
+        content = dozzle_compose.read_text()
+        container_name = f'{project_name}-app'
+        if container_name in content:
+            _log(emit, f'Dozzle already includes {container_name}')
+            return
+        # Append to the filter value: name=a|b|c → name=a|b|c|new-app
+        import re
+        content = re.sub(
+            r'(DOZZLE_FILTER:\s*"[^"]+)',
+            lambda m: m.group(0) + f'|{container_name}',
+            content,
         )
-        progress_callback("DNS record created")
-        
-        # Update config file
-        progress_callback("Updating tunnel configuration...")
-        config_file = '/etc/cloudflared/config.yml'
-        
-        # Read current config
-        with open(config_file, 'r') as f:
-            lines = f.readlines()
-        
-        # Find the catch-all 404 service line
-        insert_index = None
-        for i, line in enumerate(lines):
-            if 'http_status:404' in line:
-                insert_index = i
-                break
-        
-        if insert_index is None:
-            raise Exception("Could not find catch-all service in tunnel config")
-        
-        # Insert new ingress rule before the catch-all
-        new_rule = f"""  - hostname: {subdomain}.zedev.org
-    service: http://localhost:{odoo_port}
-"""
-        lines.insert(insert_index, new_rule)
-        
-        # Write back
-        with open(config_file, 'w') as f:
-            f.writelines(lines)
-        
-        progress_callback("Tunnel configuration updated")
-        
-        # Restart cloudflared
-        progress_callback("Restarting tunnel service...")
-        subprocess.run(['systemctl', 'restart', 'cloudflared'], check=True)
-        progress_callback("Tunnel service restarted")
-        
-        return True
+        dozzle_compose.write_text(content)
+        result = subprocess.run(
+            ['docker', 'compose', 'up', '-d'],
+            cwd=str(dozzle_compose.parent),
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            _log(emit, f'Dozzle updated — {container_name} is now visible in logs')
+        else:
+            _log(emit, f'Dozzle restart failed: {result.stderr.strip()}', error=True)
     except Exception as e:
-        progress_callback(f"Warning: Cloudflare configuration failed: {e}")
-        return False
+        _log(emit, f'Could not update Dozzle: {e}', error=True)
 
 
 def update_registry(project_name, version, odoo_port, db_port, subdomain):
-    """Add project to port registry."""
-    registry_file = Path(PROJECTS_DIR) / '.port-registry'
-    
-    # folder is the actual directory name (same as project_name in most cases)
-    folder = project_name
-    
-    entry = f"{project_name}|{version}|{odoo_port}|{db_port}|{subdomain}.zedev.org|projects/{folder}\n"
-    
+    registry_file = Path(settings.REGISTRY_FILE)
+    folder    = f'{project_name}/repo'
+    conf_file = f'{project_name}/config/odoo.conf'
+    entry = f'{project_name}|{version}|{odoo_port}|{db_port}|{subdomain}.zedev.org|{folder}|{conf_file}\n'
     with open(registry_file, 'a') as f:
         f.write(entry)
-    
-    return True
+
+
+def configure_nginx(project_name, subdomain, odoo_port, emit):
+    """Write nginx.conf to the project dir and emit a manual_step event."""
+    nginx_conf = f"""upstream {project_name} {{ server 127.0.0.1:{odoo_port}; keepalive 2; }}
+
+server {{
+    listen 80;
+    server_name {subdomain}.zedev.org;
+    proxy_read_timeout 720s;
+    proxy_connect_timeout 720s;
+    proxy_send_timeout 720s;
+    proxy_buffering off;
+    proxy_http_version 1.1;
+    proxy_redirect off;
+    client_max_body_size 512m;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Real-IP $remote_addr;
+    add_header X-Frame-Options SAMEORIGIN;
+    add_header X-Content-Type-Options nosniff;
+    access_log /var/log/nginx/{project_name}.access.log;
+    error_log /var/log/nginx/{project_name}.error.log;
+    location / {{ proxy_pass http://{project_name}; }}
+    gzip_types text/css text/less text/plain application/json application/javascript;
+    gzip on;
+}}"""
+
+    try:
+        nginx_path = Path(ODOO_DEV_BASE) / project_name / 'nginx.conf'
+        nginx_path.write_text(nginx_conf)
+    except Exception:
+        pass
+
+    emit({
+        'type': 'manual_step',
+        'id': 'nginx',
+        'label': 'Activate Nginx',
+        'items': [
+            {'kind': 'note',    'text': 'Config file written to ~/odoo-dev/{}/nginx.conf'.format(project_name)},
+            {'kind': 'command', 'text': 'sudo cp ~/odoo-dev/{name}/nginx.conf /etc/nginx/conf.d/{name}.conf'.format(name=project_name)},
+            {'kind': 'command', 'text': 'sudo nginx -t && sudo systemctl reload nginx'},
+        ],
+    })
+
+
+def configure_cloudflare(subdomain, emit):
+    """Emit a manual_step event with Cloudflare tunnel instructions."""
+    cf_yaml = f'  - hostname: {subdomain}.zedev.org\n    service: http://localhost:80'
+    emit({
+        'type': 'manual_step',
+        'id': 'cloudflare',
+        'label': 'Cloudflare Tunnel',
+        'items': [
+            {'kind': 'note',    'text': 'Register the DNS record:'},
+            {'kind': 'command', 'text': f'cloudflared tunnel route dns hrdev {subdomain}.zedev.org'},
+            {'kind': 'note',    'text': 'Add to /etc/cloudflared/config.yml — before the catch-all line:'},
+            {'kind': 'code',    'text': cf_yaml},
+            {'kind': 'command', 'text': 'sudo systemctl restart cloudflared'},
+        ],
+    })
+
+
+# ── port allocation (bulk) ────────────────────────────────────────────
+
+def get_next_n_port_pairs(n):
+    projects = read_registry()
+    used_odoo = {int(p['odoo_port']) for p in projects if p.get('odoo_port')}
+    used_db   = {int(p['db_port'])   for p in projects if p.get('db_port')}
+    docker_ports = _get_docker_used_ports()
+    used_odoo |= docker_ports
+    used_db   |= docker_ports
+    pairs = []
+    odoo, db = 8072, 15433
+    while len(pairs) < n:
+        while odoo in used_odoo:
+            odoo += 1
+        while db in used_db:
+            db += 1
+        pairs.append((odoo, db))
+        used_odoo.add(odoo); used_db.add(db)
+        odoo += 1; db += 1
+    return pairs

@@ -46,17 +46,19 @@
     </div>
 
     <!-- Branch switch / pull output -->
-    <div v-if="switchOutput" class="card mb-4 border-accent/30">
+    <div v-if="switchLines.length" class="card mb-4 border-accent/30">
       <div class="flex items-center justify-between mb-2">
         <div class="text-sm font-semibold text-slate-300">Git Output</div>
-        <button @click="switchOutput = ''" class="btn btn-ghost btn-sm">
+        <button @click="switchLines = []" class="btn btn-ghost btn-sm">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
           </svg>
           Clear
         </button>
       </div>
-      <pre class="log-output min-h-[8rem] max-h-[40vh] md:max-h-[12rem] whitespace-pre-wrap text-xs">{{ switchOutput }}</pre>
+      <div class="log-output min-h-[8rem] max-h-[40vh] md:max-h-[12rem]">
+        <div v-for="(line, i) in switchLines" :key="i" :class="line.cls" v-html="line.html" />
+      </div>
     </div>
 
     <div class="card mb-4">
@@ -118,7 +120,7 @@
                 <span class="font-mono text-sm truncate" :class="b === data.current ? 'text-white' : 'text-slate-400'" :title="b">{{ b }}</span>
                 <span v-if="b === data.current" class="text-xs text-green-400 shrink-0">(current)</span>
               </div>
-              <button v-if="b !== data.current" class="btn btn-ghost btn-sm shrink-0" @click="showConfirmModal = true; pendingBranch = b">Switch</button>
+              <button v-if="b !== data.current && props.canSwitch !== false" class="btn btn-ghost btn-sm shrink-0" @click="showConfirmModal = true; pendingBranch = b">Switch</button>
             </div>
           </div>
         </div>
@@ -134,7 +136,7 @@
             <div v-for="b in filteredRemote" :key="b"
               class="flex items-center justify-between gap-2 p-2 rounded-lg hover:bg-surface-hover/50 transition-colors min-w-0">
               <span class="font-mono text-sm text-slate-500 truncate min-w-0" :title="b">{{ b }}</span>
-              <button class="btn btn-ghost btn-sm shrink-0" @click="showConfirmModal = true; pendingBranch = b.replace('origin/', '')">Checkout</button>
+              <button v-if="props.canSwitch !== false" class="btn btn-ghost btn-sm shrink-0" @click="showConfirmModal = true; pendingBranch = b.replace('origin/', '')">Checkout</button>
             </div>
           </div>
         </div>
@@ -177,10 +179,16 @@
 </template>
 
 <script setup lang="ts">
+import { api } from '@/api'
 import { ref, computed, watch } from 'vue'
 import { useNotificationsStore } from '@/stores/notifications'
+import { parseLine, type LogLine } from '@/utils/ansi'
 
-const props = defineProps<{ projectName: string; folder: string | null; active: boolean; container: string }>()
+const props = defineProps<{ projectName: string; folder: string | null; active: boolean; container: string; canSwitch?: boolean }>()
+const emit = defineEmits<{
+  'branch-changed': [branch: string]
+  'container-restarted': []
+}>()
 const notify = useNotificationsStore()
 
 interface BranchData { local: string[]; remote: string[]; current: string | null; error?: string }
@@ -190,7 +198,7 @@ const data = ref<BranchData>({ local: [], remote: [], current: null })
 const submodules = ref<Submodule[]>([])
 const loading = ref(false)
 const loaded = ref(false)
-const switchOutput = ref('')
+const switchLines = ref<LogLine[]>([])
 const searchQuery = ref('')
 const showConfirmModal = ref(false)
 const showRestartModal = ref(false)
@@ -213,8 +221,8 @@ watch(() => props.active, (v) => { if (v && !loaded.value) load() }, { immediate
 async function load() {
   loading.value = true
   const [branchRes, subRes] = await Promise.all([
-    fetch(`/api/git/${props.projectName}/branches`),
-    fetch(`/api/git/${props.projectName}/submodules`),
+    api(`/api/git/${props.projectName}/branches`),
+    api(`/api/git/${props.projectName}/submodules`),
   ])
   data.value = await branchRes.json()
   const subData = await subRes.json()
@@ -229,8 +237,8 @@ async function confirmSwitch() {
 }
 
 async function switchBranch(branch: string) {
-  switchOutput.value = ''
-  const res = await fetch(`/api/git/${props.projectName}/switch`, {
+  switchLines.value = []
+  const res = await api(`/api/git/${props.projectName}/switch`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ branch }),
   })
@@ -241,12 +249,13 @@ async function switchBranch(branch: string) {
   const source = new EventSource(d.stream_url)
   source.onmessage = (evt) => {
     const msg = JSON.parse(evt.data)
-    switchOutput.value += msg.line + '\n'
+    switchLines.value.push(parseLine(msg.line ?? ''))
     if (msg.done) {
       source.close()
       loaded.value = false  // invalidate so next activate or manual refresh re-fetches
       load()
       switchComplete = true
+      emit('branch-changed', branch)
       showRestartModal.value = true
     }
   }
@@ -256,8 +265,9 @@ async function switchBranch(branch: string) {
 async function restartContainer() {
   showRestartModal.value = false
   try {
-    const res = await fetch(`/api/restart/${props.container}`, { method: 'POST' })
+    const res = await api(`/api/restart/${props.container}`, { method: 'POST' })
     const data = await res.json()
+    if (data.ok) emit('container-restarted')
     notify.add(data.ok ? 'success' : 'error', data.ok ? 'Container restarting...' : data.error)
   } catch (err) {
     notify.add('error', 'Failed to restart container')
@@ -265,30 +275,30 @@ async function restartContainer() {
 }
 
 async function updateSubmodules() {
-  switchOutput.value = ''
-  const res = await fetch(`/api/git/${props.projectName}/submodule-update`, { method: 'POST' })
+  switchLines.value = []
+  const res = await api(`/api/git/${props.projectName}/submodule-update`, { method: 'POST' })
   const d = await res.json()
   if (!d.ok) { notify.add('error', d.error); return }
 
   const source = new EventSource(d.stream_url)
   source.onmessage = (evt) => {
     const msg = JSON.parse(evt.data)
-    switchOutput.value += msg.line + '\n'
+    switchLines.value.push(parseLine(msg.line ?? ''))
     if (msg.done) { source.close(); loaded.value = false; load() }
   }
   source.onerror = () => source.close()
 }
 
 async function gitPull() {
-  switchOutput.value = ''
-  const res = await fetch(`/api/git/${props.projectName}/pull`, { method: 'POST' })
+  switchLines.value = []
+  const res = await api(`/api/git/${props.projectName}/pull`, { method: 'POST' })
   const d = await res.json()
   if (!d.ok) { notify.add('error', d.error); return }
 
   const source = new EventSource(d.stream_url)
   source.onmessage = (evt) => {
     const msg = JSON.parse(evt.data)
-    switchOutput.value += msg.line + '\n'
+    switchLines.value.push(parseLine(msg.line ?? ''))
     // Pull doesn't change current branch — no need to re-fetch branch list
     if (msg.done) { source.close(); notify.add('success', 'Pull complete') }
   }

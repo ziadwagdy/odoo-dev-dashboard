@@ -34,3 +34,46 @@ export function odooLogClass(line: string): string {
   if (/ DEBUG /.test(line)) return 'log-debug'
   return 'log-info'
 }
+
+/** Classify a generic output line (deploy/git/docker) into a CSS class. */
+export function classifyLine(line: string): string {
+  const t = line.trim()
+
+  // Odoo structured log levels take priority
+  if (/ CRITICAL /.test(line)) return 'log-critical'
+  if (/ ERROR /.test(line))    return 'log-error'
+  if (/ WARNING /.test(line))  return 'log-warning'
+  if (/ DEBUG /.test(line))    return 'log-debug'
+
+  // Docker build steps: #1 [internal] ..., #2 FROM ..., STEP 1/N etc.
+  if (/^#\d+\s/.test(t) || /^Step\s+\d+\/\d+/i.test(t)) return 'log-step'
+
+  // Errors (case-insensitive keywords)
+  if (/\berror\b|\bfailed\b|\bfailure\b|\bexception\b|\btraceback\b/i.test(t)) return 'log-error'
+
+  // Warnings
+  if (/\bwarn(ing)?\b/i.test(t)) return 'log-warning'
+
+  // Success / completion signals
+  if (/\b(success(fully)?|complete[d]?|done|built|pushed|pulled|cloned|started|healthy)\b/i.test(t)) return 'log-success'
+
+  // Git output highlights
+  if (/^(From |Branch |Updating |Fast-forward|Already up to date|HEAD is now)/i.test(t)) return 'log-success'
+  if (/^\s*[\+\-]{3}\s/.test(t) || /^@@/.test(t)) return 'log-warning'   // diff hunks
+  if (/^\s*remote:/i.test(t)) return 'log-dim'
+
+  // Separator / divider lines
+  if (/^[-=]{3,}/.test(t) || /^---/.test(t)) return 'log-separator'
+
+  // Exit code lines
+  if (/exit code: 0/.test(t)) return 'log-success'
+  if (/exit code: [^0]/.test(t)) return 'log-error'
+
+  return 'log-info'
+}
+
+export interface LogLine { raw: string; html: string; cls: string }
+
+export function parseLine(raw: string): LogLine {
+  return { raw, html: ansiToHtml(raw), cls: classifyLine(raw) }
+}

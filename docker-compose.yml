@@ -36,6 +36,7 @@ services:
       - ${ODOO_DEV_BASE:-/srv/odoo-dev}:${ODOO_DEV_BASE:-/srv/odoo-dev}:rw
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - dashboard-data:/app/data
+      - ${HOME}/.ssh:/root/.ssh:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     expose:

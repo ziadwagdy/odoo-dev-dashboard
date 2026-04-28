@@ -1,7 +1,7 @@
 <template>
-  <div class="space-y-3">
+  <div class="space-y-3 min-w-0">
     <!-- Kernel control bar -->
-    <div class="card flex flex-col sm:flex-row sm:items-center gap-3">
+    <div class="card flex flex-col sm:flex-row sm:items-center gap-3 min-w-0">
       <div class="flex items-center gap-2">
         <span class="w-2 h-2 rounded-full transition-colors"
           :class="kernelStatus.running ? 'bg-green-400' : 'bg-slate-600'" />
@@ -14,7 +14,7 @@
       </div>
 
       <template v-if="!kernelStatus.running">
-        <select v-model="selectedDb" class="input text-sm flex-1 sm:flex-none">
+        <select v-model="selectedDb" class="input text-sm flex-1 min-w-0">
           <option value="">Select database…</option>
           <option v-for="db in databases" :key="db" :value="db">{{ db }}</option>
         </select>
@@ -48,9 +48,9 @@
 
     <!-- Cells -->
     <div v-for="(cell, idx) in cells" :key="cell.id"
-      class="card border-[#2d3148] overflow-hidden p-0">
+      class="card border-[#2d3148] overflow-hidden p-0 min-w-0">
       <!-- Cell header -->
-      <div class="flex items-center justify-between px-3 py-1.5 bg-[#0f1117]/60 border-b border-[#2d3148]">
+      <div class="notebook-header flex items-center justify-between px-3 py-1.5 bg-[#0f1117]/60 border-b border-[#2d3148]">
         <span class="text-xs text-slate-500 font-mono select-none">In [{{ idx + 1 }}]</span>
         <div class="flex gap-1">
           <button class="btn btn-primary btn-sm py-0.5 px-2 text-xs"
@@ -68,7 +68,7 @@
       <!-- Code textarea -->
       <textarea
         v-model="cell.code"
-        class="w-full bg-[#0a0c12] text-slate-200 font-mono text-[13px] leading-relaxed p-3
+        class="notebook-code w-full bg-[#0a0c12] text-slate-200 font-mono text-[13px] leading-relaxed p-3
                focus:outline-none focus:ring-1 focus:ring-[#6366f1]/40 resize-y min-h-[80px]"
         :placeholder="idx === 0 ? '# Full Odoo shell environment available\n# env, self, env[\'res.partner\'].search([]) ...' : '# Python code'"
         spellcheck="false"
@@ -77,7 +77,7 @@
       />
 
       <!-- Output -->
-      <div v-if="cell.outputs.length || cell.status === 'running'" class="border-t border-[#2d3148]">
+      <div v-if="cell.outputs.length || cell.status === 'running'" class="border-t border-[#2d3148] min-w-0 overflow-x-hidden">
         <div v-if="cell.status === 'running'" class="px-3 py-2 text-xs text-slate-500 flex items-center gap-2">
           <span class="inline-block w-2 h-2 bg-amber-400 rounded-full pulse" />
           Executing…
@@ -90,9 +90,9 @@
             :src="'data:image/png;base64,' + out.data"
             class="max-w-full h-auto rounded px-3 py-2 border-t border-[#2d3148]/50 first:border-t-0" />
           <div v-else
-            class="font-mono text-[12px] leading-relaxed px-3 py-2 whitespace-pre-wrap border-t border-[#2d3148]/50 first:border-t-0"
+            class="font-mono text-[12px] leading-relaxed px-3 py-2 whitespace-pre-wrap overflow-x-auto border-t border-[#2d3148]/50 first:border-t-0"
             :class="{
-              'text-slate-300 bg-[#0a0c12]': out.type === 'stdout' || out.type === 'text',
+              'notebook-code text-slate-300 bg-[#0a0c12]': out.type === 'stdout' || out.type === 'text',
               'text-red-400 bg-red-950/20': out.type === 'stderr' || out.type === 'error',
             }"
             v-html="renderOutput(out.data)"
@@ -108,6 +108,7 @@
 </template>
 
 <script setup lang="ts">
+import { api } from '@/api'
 import { ref, computed, onUnmounted, watch } from 'vue'
 import { useNotificationsStore } from '@/stores/notifications'
 import { ansiToHtml } from '@/utils/ansi'
@@ -136,12 +137,12 @@ watch(() => props.active, (v) => { if (v) init() }, { immediate: true })
 async function init() {
   // Load databases
   if (!databases.value.length) {
-    const res = await fetch(`/api/db/${props.projectName}/list`)
+    const res = await api(`/api/db/${props.projectName}/list`)
     const data = await res.json()
     databases.value = (data.databases || []).map((d: { name: string }) => d.name)
   }
   // Get kernel status
-  const res = await fetch(`/api/notebooks/${props.projectName}/status`)
+  const res = await api(`/api/notebooks/${props.projectName}/status`)
   kernelStatus.value = await res.json()
   if (kernelStatus.value.running) connectWS()
 }
@@ -206,7 +207,7 @@ function waitForOpen(): Promise<void> {
 
 async function stopKernel() {
   ws?.send(JSON.stringify({ type: 'stop' }))
-  await fetch(`/api/notebooks/${props.projectName}/stop`, { method: 'POST' })
+  await api(`/api/notebooks/${props.projectName}/stop`, { method: 'POST' })
   kernelStatus.value = { running: false }
   ws?.close()
   ws = null
@@ -264,5 +265,20 @@ onUnmounted(() => ws?.close())
 }
 .notebook-output-html :deep(tr:nth-child(even)) {
   background: #0f1117;
+}
+
+/* Light theme: html output tables use surface colors */
+:global([data-theme="light"]) .notebook-output-html :deep(table) {
+  color: rgb(26, 15, 46);
+}
+:global([data-theme="light"]) .notebook-output-html :deep(th) {
+  background: rgb(240, 234, 250);
+  border-color: rgb(224, 214, 238);
+}
+:global([data-theme="light"]) .notebook-output-html :deep(td) {
+  border-color: rgb(224, 214, 238);
+}
+:global([data-theme="light"]) .notebook-output-html :deep(tr:nth-child(even)) {
+  background: rgb(249, 247, 252);
 }
 </style>

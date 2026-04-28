@@ -181,6 +181,7 @@
 </template>
 
 <script setup lang="ts">
+import { api } from '@/api'
 import { ref, watch } from 'vue'
 import { useNotificationsStore } from '@/stores/notifications'
 
@@ -207,7 +208,7 @@ watch(() => props.active, (v) => { if (v && !loaded.value) { loadDbs(); loadBack
 
 async function loadDbs() {
   loading.value = true; error.value = ''
-  const res = await fetch(`/api/db/${props.projectName}/list`)
+  const res = await api(`/api/db/${props.projectName}/list`)
   const data = await res.json()
   loading.value = false
   if (data.error) { error.value = data.error; return }
@@ -218,7 +219,7 @@ async function loadDbs() {
 
 async function loadAllSchedules() {
   for (const db of dbs.value) {
-    const res = await fetch(`/api/db/${props.projectName}/backup-schedule/${db.name}`)
+    const res = await api(`/api/db/${props.projectName}/backup-schedule/${db.name}`)
     const data = await res.json()
     schedules.value[db.name] = {
       enabled: data.enabled, schedule: data.schedule,
@@ -244,7 +245,7 @@ function updateScheduleField(dbname: string, field: 'schedule' | 'retention', va
 async function saveSchedule(dbname: string) {
   const s = schedules.value[dbname]
   if (!s) return
-  const res = await fetch(`/api/db/${props.projectName}/backup-schedule/${dbname}/save`, {
+  const res = await api(`/api/db/${props.projectName}/backup-schedule/${dbname}/save`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ enabled: s.enabled, schedule: s.schedule, retention: s.retention }),
   })
@@ -258,14 +259,14 @@ async function saveSchedule(dbname: string) {
 }
 
 async function loadBackups() {
-  const res = await fetch(`/api/db/${props.projectName}/backups`)
+  const res = await api(`/api/db/${props.projectName}/backups`)
   const data = await res.json()
   backups.value = data.backups || []
 }
 
 async function backup(dbname: string) {
   notify.add('info', `Backing up ${dbname}…`)
-  const res = await fetch(`/api/db/${props.projectName}/backup/${dbname}`, { method: 'POST' })
+  const res = await api(`/api/db/${props.projectName}/backup/${dbname}`, { method: 'POST' })
   const data = await res.json()
   if (data.ok) {
     window.location.href = data.download_url
@@ -284,7 +285,7 @@ function duplicate(dbname: string) {
     confirm: async () => {
       const newName = modalInput.value.trim()
       if (!newName) return
-      const res = await fetch(`/api/db/${props.projectName}/duplicate/${dbname}`, {
+      const res = await api(`/api/db/${props.projectName}/duplicate/${dbname}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ new_name: newName }),
       })
@@ -304,7 +305,7 @@ function drop(dbname: string) {
     placeholder: dbname,
     confirm: async () => {
       if (modalInput.value !== dbname) { notify.add('error', 'Name does not match'); return }
-      const res = await fetch(`/api/db/${props.projectName}/drop/${dbname}`, {
+      const res = await api(`/api/db/${props.projectName}/drop/${dbname}`, {
         method: 'DELETE', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ confirm: dbname }),
       })
@@ -320,7 +321,7 @@ async function restoreFrom(filename: string) {
   const dbname = prompt('Restore into which database name?')
   if (!dbname) return
   notify.add('info', `Restoring into ${dbname}…`)
-  const res = await fetch(`/api/db/${props.projectName}/restore/${dbname}`, {
+  const res = await api(`/api/db/${props.projectName}/restore/${dbname}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ filename }),
   })
@@ -337,7 +338,7 @@ async function uploadRestore(evt: Event) {
   const form = new FormData()
   form.append('file', file)
   notify.add('info', 'Uploading and restoring…')
-  const res = await fetch(`/api/db/${props.projectName}/restore/${dbname}`, { method: 'POST', body: form })
+  const res = await api(`/api/db/${props.projectName}/restore/${dbname}`, { method: 'POST', body: form })
   const data = await res.json()
   notify.add(data.ok ? 'success' : 'error', data.ok ? 'Restored successfully' : data.error)
   if (data.ok) loadDbs()

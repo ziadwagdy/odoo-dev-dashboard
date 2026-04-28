@@ -1,21 +1,9 @@
 <template>
-  <div class="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-10">
-    <!-- Header -->
-    <div class="flex flex-col sm:flex-row sm:items-center gap-3 md:gap-4 mb-6 md:mb-10">
-      <RouterLink to="/" class="btn btn-ghost btn-sm">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-        </svg>
-        Dashboard
-      </RouterLink>
-      <div class="hidden sm:block h-6 w-px bg-border"></div>
-      <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-white to-accent-light bg-clip-text text-transparent">Health Monitor</h1>
-      <span class="hidden md:flex items-center gap-2 ml-auto text-xs text-slate-400">
-        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-        <span class="font-medium text-emerald-400">Live</span>
-        <span class="text-slate-500">· updates every 3s</span>
-      </span>
-    </div>
+  <SidebarLayout>
+    <template #breadcrumb>
+      <Breadcrumb :crumbs="[{ label: 'Health Monitor' }]" />
+    </template>
+    <div class="max-w-4xl">
 
     <!-- Host System -->
     <div class="card mb-6">
@@ -209,12 +197,120 @@
       </div>
       </template>
     </div>
-  </div>
+      <!-- Storage Breakdown -->
+      <div class="card !p-0 mt-6 overflow-hidden">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-border/40">
+          <div class="flex items-center gap-3">
+            <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400">Disk — Project Breakdown</h2>
+          </div>
+          <div class="flex items-center gap-3">
+            <!-- Legend -->
+            <div class="hidden sm:flex items-center gap-3 text-[11px]" style="color:rgb(var(--t-muted))">
+              <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-blue-500/80 inline-block"></span>Database</span>
+              <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-accent/80 inline-block"></span>Filestore</span>
+              <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-500/80 inline-block"></span>Code</span>
+            </div>
+            <button
+              class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-border/60 hover:border-accent/40 hover:bg-accent/10 transition-all"
+              style="color:rgb(var(--t-sec))"
+              :disabled="storageLoading"
+              @click="fetchStorage"
+            >
+              <svg class="w-3.5 h-3.5" :class="storageLoading ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+              </svg>
+              {{ storageLoading ? 'Scanning…' : 'Refresh' }}
+            </button>
+          </div>
+        </div>
+
+        <div v-if="!storageData && !storageLoading" class="flex flex-col items-center justify-center py-12 gap-3">
+          <svg class="w-8 h-8 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/></svg>
+          <p class="text-sm" style="color:rgb(var(--t-muted))">Click Refresh to scan project disk usage</p>
+        </div>
+
+        <div v-else-if="storageLoading && !storageData" class="flex items-center justify-center py-12 gap-2 text-sm" style="color:rgb(var(--t-muted))">
+          <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+          Scanning all projects…
+        </div>
+
+        <div v-else-if="storageData">
+          <!-- Host disk summary bar -->
+          <div class="px-5 py-3 border-b border-border/20 flex items-center gap-4">
+            <span class="text-xs font-medium w-20 shrink-0" style="color:rgb(var(--t-muted))">Host disk</span>
+            <div class="flex-1 h-2.5 rounded-full overflow-hidden bg-surface-hover border border-border/40">
+              <div
+                class="h-full rounded-full transition-all duration-700"
+                :class="storageData.disk_pct > 90 ? 'bg-red-500' : storageData.disk_pct > 75 ? 'bg-amber-500' : 'bg-indigo-500'"
+                :style="{ width: storageData.disk_pct + '%' }"
+              />
+            </div>
+            <span class="text-xs font-mono shrink-0 text-slate-400">{{ storageData.disk_used_gb }} / {{ storageData.disk_total_gb }} GB</span>
+            <span class="text-xs font-semibold shrink-0 w-10 text-right"
+              :class="storageData.disk_pct > 90 ? 'text-red-400' : storageData.disk_pct > 75 ? 'text-amber-400' : 'text-slate-300'">
+              {{ storageData.disk_pct }}%
+            </span>
+          </div>
+
+          <!-- Per-project rows -->
+          <div class="divide-y divide-border/20">
+            <div
+              v-for="p in storageData.projects"
+              :key="p.name"
+              class="flex items-center gap-4 px-5 py-3 hover:bg-surface-hover/30 transition-colors"
+            >
+              <!-- Name -->
+              <span class="text-sm font-medium text-slate-300 w-32 shrink-0 truncate" :title="p.name">{{ p.name }}</span>
+
+              <!-- Stacked bar -->
+              <div class="flex-1 h-5 rounded-lg overflow-hidden bg-surface-hover border border-border/30 flex min-w-0">
+                <div
+                  v-if="p.db_bytes"
+                  class="h-full bg-blue-500/70 transition-all duration-700 hover:bg-blue-500"
+                  :style="{ width: pct(p.db_bytes, maxTotal) + '%' }"
+                  :title="`Database: ${fmt(p.db_bytes)}`"
+                />
+                <div
+                  v-if="p.filestore_bytes"
+                  class="h-full bg-accent/70 transition-all duration-700 hover:bg-accent"
+                  :style="{ width: pct(p.filestore_bytes, maxTotal) + '%' }"
+                  :title="`Filestore: ${fmt(p.filestore_bytes)}`"
+                />
+                <div
+                  v-if="p.code_bytes"
+                  class="h-full bg-emerald-500/70 transition-all duration-700 hover:bg-emerald-500"
+                  :style="{ width: pct(p.code_bytes, maxTotal) + '%' }"
+                  :title="`Code: ${fmt(p.code_bytes)}`"
+                />
+              </div>
+
+              <!-- Breakdown numbers -->
+              <div class="hidden lg:flex items-center gap-3 text-[11px] shrink-0" style="color:rgb(var(--t-muted))">
+                <span v-if="p.db_bytes" class="text-blue-400/80">DB {{ fmt(p.db_bytes) }}</span>
+                <span v-if="p.filestore_bytes" class="text-accent/80">FS {{ fmt(p.filestore_bytes) }}</span>
+                <span v-if="p.code_bytes" class="text-emerald-400/80">Code {{ fmt(p.code_bytes) }}</span>
+              </div>
+
+              <!-- Total -->
+              <span class="text-sm font-mono font-semibold text-slate-300 w-16 text-right shrink-0">{{ fmt(p.total_bytes) }}</span>
+            </div>
+
+            <div v-if="storageData.projects.length === 0" class="px-5 py-8 text-center text-sm" style="color:rgb(var(--t-muted))">
+              No projects found
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </SidebarLayout>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { RouterLink } from 'vue-router'
+import { api } from '@/api'
+import SidebarLayout from '@/layouts/SidebarLayout.vue'
+import Breadcrumb from '@/components/Breadcrumb.vue'
 import CpuGauge from '@/components/CpuGauge.vue'
 
 interface HostStats {
@@ -237,8 +333,25 @@ interface ContainerStat {
   mem_pct: number | null
 }
 
+interface ProjectStorage {
+  name: string
+  filestore_bytes: number
+  code_bytes: number
+  db_bytes: number
+  total_bytes: number
+}
+
+interface StorageData {
+  projects: ProjectStorage[]
+  disk_used_gb: number
+  disk_total_gb: number
+  disk_pct: number
+}
+
 const hostStats = ref<HostStats | null>(null)
 const containerStats = ref<ContainerStat[]>([])
+const storageData = ref<StorageData | null>(null)
+const storageLoading = ref(false)
 
 let hostSrc: EventSource | null = null
 let containerSrc: EventSource | null = null
@@ -252,6 +365,31 @@ const sortedContainers = computed(() =>
     return a.name.localeCompare(b.name)
   })
 )
+
+const maxTotal = computed(() =>
+  Math.max(...(storageData.value?.projects.map(p => p.total_bytes) ?? [1]), 1)
+)
+
+function fmt(bytes: number): string {
+  if (bytes >= 1024 ** 3) return (bytes / 1024 ** 3).toFixed(1) + ' GB'
+  if (bytes >= 1024 ** 2) return (bytes / 1024 ** 2).toFixed(0) + ' MB'
+  if (bytes >= 1024)      return (bytes / 1024).toFixed(0) + ' KB'
+  return bytes + ' B'
+}
+
+function pct(part: number, total: number): number {
+  return total > 0 ? Math.round((part / total) * 100) : 0
+}
+
+async function fetchStorage() {
+  storageLoading.value = true
+  try {
+    const res = await api('/api/storage')
+    storageData.value = await res.json()
+  } finally {
+    storageLoading.value = false
+  }
+}
 
 function barClass(pct: number) {
   if (pct > 90) return 'bg-red-400'

@@ -22,6 +22,7 @@ def read_registry():
                     'url':       parts[4],
                     'container': f'{parts[0]}-app',
                     'folder':    parts[5].strip() if len(parts) >= 6 else None,
+                    'conf_file': parts[6].strip() if len(parts) >= 7 else None,
                 })
     return projects
 
@@ -31,3 +32,5 @@ def get_project(name):
         if p['name'] == name:
             return p
     return None
+
+

@@ -6,7 +6,20 @@ import threading
 import psutil
 from django.http import StreamingHttpResponse
 
+from asgiref.sync import sync_to_async
 from services.registry import read_registry
+from apps.projects.models import UserProjectAssignment
+
+
+async def _allowed_names(user):
+    if not user or not user.is_authenticated:
+        return None
+    is_admin = await sync_to_async(lambda: user.groups.filter(name='admin').exists())()
+    if is_admin:
+        return None
+    return await sync_to_async(
+        lambda: set(UserProjectAssignment.objects.filter(user=user).values_list('project_name', flat=True))
+    )()
 from services.docker_service import get_container_status, get_container_logs, exec_in_container, get_docker_client
 from services.health_service import get_host_stats, get_all_container_stats
 from state import deploy_queues, branch_switch_queues, submodule_queues, pull_queues
@@ -25,10 +38,14 @@ def _sse_response(async_gen):
 
 
 async def stream_status(request):
+    allowed = await _allowed_names(getattr(request, 'user', None))
+
     async def generate():
         loop = asyncio.get_running_loop()
         while True:
             projects = read_registry()
+            if allowed is not None:
+                projects = [p for p in projects if p['name'] in allowed]
             payload = []
             for p in projects:
                 status = await loop.run_in_executor(None, lambda c=p['container']: get_container_status(c))
@@ -254,10 +271,14 @@ async def stream_health_host(request):
 
 
 async def stream_health_containers(request):
+    allowed = await _allowed_names(getattr(request, 'user', None))
+
     async def generate():
         loop = asyncio.get_running_loop()
         while True:
             projects = read_registry()
+            if allowed is not None:
+                projects = [p for p in projects if p['name'] in allowed]
             stats = await loop.run_in_executor(
                 None, lambda: get_all_container_stats(projects)
             )

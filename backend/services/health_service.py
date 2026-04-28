@@ -1,7 +1,10 @@
+import os
+import subprocess
 import psutil
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from services.docker_service import get_container_stats, get_container_status
+from django.conf import settings
+from services.docker_service import get_container_stats, get_container_status, get_docker_client
 
 
 def get_host_stats() -> dict:
@@ -55,3 +58,84 @@ def get_all_container_stats(projects: list) -> list:
                 }
     # Return in original registry order
     return [results[p['name']] for p in projects if p['name'] in results]
+
+
+def _get_project_storage(project: dict) -> dict:
+    name = project['name']
+    container = project['container']
+    folder = project.get('folder')
+    db_port = project.get('db_port')
+
+    filestore_bytes = 0
+    code_bytes = 0
+    db_bytes = 0
+
+    # Filestore: exec du inside the app container
+    try:
+        client = get_docker_client()
+        c = client.containers.get(container)
+        result = c.exec_run('du -sb /var/lib/odoo', demux=False)
+        if result.exit_code == 0:
+            filestore_bytes = int(result.output.decode().split('\t')[0])
+    except Exception:
+        pass
+
+    # Code repo: du on the folder path (ODOO_DEV_BASE is mounted in the backend)
+    if folder:
+        full_path = os.path.join(settings.ODOO_DEV_BASE, folder)
+        try:
+            r = subprocess.run(['du', '-sb', full_path], capture_output=True, text=True, timeout=15)
+            if r.returncode == 0:
+                code_bytes = int(r.stdout.split('\t')[0])
+        except Exception:
+            pass
+
+    # Database: sum pg_database_size for all non-system DBs
+    if db_port:
+        try:
+            import psycopg2
+            conn = psycopg2.connect(
+                host=settings.DB_HOST, port=int(db_port),
+                user=settings.DB_USER, password=settings.DB_PASSWORD,
+                dbname='postgres', connect_timeout=3,
+            )
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT COALESCE(SUM(pg_database_size(datname)), 0) FROM pg_database "
+                "WHERE datname NOT IN ('postgres','template0','template1')"
+            )
+            row = cur.fetchone()
+            db_bytes = int(row[0]) if row else 0
+            conn.close()
+        except Exception:
+            pass
+
+    return {
+        'name': name,
+        'filestore_bytes': filestore_bytes,
+        'code_bytes': code_bytes,
+        'db_bytes': db_bytes,
+        'total_bytes': filestore_bytes + code_bytes + db_bytes,
+    }
+
+
+def get_all_project_storage(projects: list) -> list:
+    if not projects:
+        return []
+    results = {}
+    with ThreadPoolExecutor(max_workers=min(len(projects), 6)) as pool:
+        futures = {pool.submit(_get_project_storage, p): p['name'] for p in projects}
+        for future in as_completed(futures):
+            name = futures[future]
+            try:
+                results[name] = future.result()
+            except Exception:
+                results[name] = {
+                    'name': name, 'filestore_bytes': 0, 'code_bytes': 0,
+                    'db_bytes': 0, 'total_bytes': 0,
+                }
+    return sorted(
+        [results[p['name']] for p in projects if p['name'] in results],
+        key=lambda x: x['total_bytes'],
+        reverse=True,
+    )

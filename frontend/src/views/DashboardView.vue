@@ -1,166 +1,261 @@
 <template>
-  <div class="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-10">
-    <!-- Header -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-0 mb-6 md:mb-10">
-      <div class="flex items-center gap-3 md:gap-6">
-        <Logo />
-        <div class="hidden md:block h-12 w-px bg-border"></div>
-        <div class="hidden md:block">
-          <p class="text-sm text-slate-400 flex items-center gap-2">
-            <span v-if="store.lastUpdated" class="flex items-center gap-1.5">
-              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span class="font-medium text-emerald-400">Live</span>
-              <span class="text-slate-500">·</span>
-              <span>{{ store.lastUpdated.toLocaleTimeString() }}</span>
-            </span>
-            <span v-else class="text-slate-500">Connecting…</span>
-          </p>
+  <SidebarLayout>
+    <template #breadcrumb>
+      <Breadcrumb />
+    </template>
+
+    <div class="max-w-6xl mx-auto w-full space-y-8">
+
+      <!-- Loading state -->
+      <div v-if="store.loading && !store.projects.length"
+           class="flex items-center justify-center py-32 text-slate-400">
+        <div class="text-center">
+          <div class="inline-block w-10 h-10 border-4 border-accent/30 border-t-accent rounded-full animate-spin mb-4"></div>
+          <p class="text-sm font-medium">Loading projects…</p>
         </div>
       </div>
-      <!-- Infra shortcuts -->
-      <div class="flex gap-2 md:gap-3 overflow-x-auto">
-        <RouterLink to="/onboard" class="btn btn-primary text-xs md:text-sm whitespace-nowrap">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-          </svg>
-          <span class="hidden sm:inline">New Project</span>
-        </RouterLink>
-        <button class="btn btn-ghost text-xs md:text-sm whitespace-nowrap" @click="showGroupManager = true">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
-          </svg>
-          <span class="hidden sm:inline">Groups</span>
-        </button>
-        <RouterLink to="/health" class="btn btn-ghost text-xs md:text-sm whitespace-nowrap">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-          </svg>
-          <span class="hidden sm:inline">Health</span>
-        </RouterLink>
-        <RouterLink to="/help" class="btn btn-ghost text-xs md:text-sm whitespace-nowrap">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-          </svg>
-          <span class="hidden sm:inline">Help</span>
-        </RouterLink>
-        <a v-if="config.logsUrl" :href="config.logsUrl" target="_blank" rel="noopener" class="btn btn-ghost text-xs md:text-sm whitespace-nowrap">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-          </svg>
-          <span class="hidden sm:inline">Logs</span>
-        </a>
-        <a v-if="config.filesUrl" :href="config.filesUrl" target="_blank" rel="noopener" class="btn btn-ghost text-xs md:text-sm whitespace-nowrap">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
-          </svg>
-          <span class="hidden sm:inline">Files</span>
-        </a>
-        <a v-if="config.terminalUrl" :href="config.terminalUrl" target="_blank" rel="noopener" class="btn btn-ghost text-xs md:text-sm whitespace-nowrap">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-          </svg>
-          <span class="hidden sm:inline">Terminal</span>
-        </a>
-      </div>
-    </div>
 
-    <!-- Loading -->
-    <div v-if="store.loading && !store.projects.length && !store.groups.length" class="text-center py-20 md:py-32 text-slate-400">
-      <div class="inline-block w-10 h-10 md:w-12 md:h-12 border-4 border-accent/30 border-t-accent rounded-full animate-spin mb-4"></div>
-      <p class="text-base md:text-lg font-medium">Loading projects…</p>
-    </div>
+      <template v-else>
 
-    <!-- Grouped projects (true environment separation) -->
-    <div v-if="store.groups.length" class="mb-8">
-      <div class="flex items-center gap-2 mb-4">
-        <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400">Projects</h2>
-        <div class="h-px flex-1 bg-gradient-to-r from-border to-transparent"></div>
-      </div>
-      <div class="space-y-4">
-        <ProjectGroupCard
-          v-for="g in store.groups"
-          :key="g.name"
-          :group="g"
-          @restart="restartProject"
-        />
-      </div>
-    </div>
+        <!-- Summary strip -->
+        <div v-if="store.projects.length" class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="card !p-3 md:!p-4 text-center">
+            <div class="text-2xl font-bold text-slate-100 tabular-nums">{{ store.projects.length }}</div>
+            <div class="text-[11px] text-slate-500 uppercase tracking-wide mt-0.5">Projects</div>
+          </div>
+          <div class="card !p-3 md:!p-4 text-center">
+            <div class="text-2xl font-bold text-emerald-400 tabular-nums">{{ runningCount }}</div>
+            <div class="text-[11px] text-slate-500 uppercase tracking-wide mt-0.5">Running</div>
+          </div>
+          <div class="card !p-3 md:!p-4 text-center">
+            <div class="text-2xl font-bold text-red-400 tabular-nums">{{ stoppedCount }}</div>
+            <div class="text-[11px] text-slate-500 uppercase tracking-wide mt-0.5">Stopped</div>
+          </div>
+          <div class="card !p-3 md:!p-4 text-center">
+            <div class="text-2xl font-bold text-slate-300 tabular-nums">{{ Object.keys(store.ungroupedByVersion).length }}</div>
+            <div class="text-[11px] text-slate-500 uppercase tracking-wide mt-0.5">Versions</div>
+          </div>
+        </div>
 
-    <!-- Ungrouped projects by version -->
-    <div v-for="(versionProjects, version) in store.ungroupedByVersion" :key="version" class="mb-8 md:mb-10">
-      <div class="flex items-center gap-2 md:gap-3 mb-4 md:mb-5">
-        <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400">
-          Odoo {{ version }}
-        </h2>
-        <div class="h-px flex-1 bg-gradient-to-r from-border to-transparent"></div>
-        <span class="text-xs text-slate-500 font-medium whitespace-nowrap">
-          {{ versionProjects.length }} {{ versionProjects.length === 1 ? 'project' : 'projects' }}
-        </span>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
-        <ProjectCard
-          v-for="p in versionProjects"
-          :key="p.name"
-          :project="p"
-          @restart="restartProject"
-        />
-      </div>
-    </div>
+        <!-- Projects by version -->
+        <div
+          v-for="(versionProjects, version, vIdx) in store.ungroupedByVersion"
+          :key="version"
+          class="fade-in-up"
+          :style="{ animationDelay: `${vIdx * 60}ms` }"
+        >
+          <SectionHeader :title="`Odoo ${version}`" :count="versionProjects.length" />
 
-    <!-- Group Manager Modal -->
-    <GroupManagerModal
-      :show="showGroupManager"
-      :available-instances="allInstances"
-      @close="showGroupManager = false"
-      @saved="store.fetchProjects()"
-    />
-  </div>
+          <!-- ── Desktop: table (md+) ─────────────────────────── -->
+          <div class="card overflow-hidden hidden md:block">
+            <table class="table-base w-full">
+              <thead>
+                <tr>
+                  <th>Project</th>
+                  <th class="text-center">Status</th>
+                  <th>Branch</th>
+                  <th>Databases</th>
+                  <th class="hidden lg:table-cell">URL</th>
+                  <th class="text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="(p, rowIdx) in versionProjects"
+                  :key="p.name"
+                  class="fade-in-row"
+                  :style="{ animationDelay: `${rowIdx * 25}ms` }"
+                  :class="p.status === 'running'
+                    ? 'table-row-running'
+                    : p.status === 'restarting'
+                      ? 'table-row-restarting'
+                      : 'table-row-stopped'"
+                >
+                  <td>
+                    <RouterLink
+                      :to="`/project/${p.name}`"
+                      class="font-semibold hover:text-accent transition-colors"
+                      :class="p.status === 'running' ? 'text-slate-200' : 'text-slate-400'"
+                    >{{ p.name }}</RouterLink>
+                    <span v-if="p.pending_count" class="ml-2 text-[10px] text-amber-400 font-medium">
+                      {{ p.pending_count }} pending
+                    </span>
+                  </td>
+                  <td class="text-center"><StatusBadge :status="p.status" /></td>
+                  <td class="text-slate-400 text-xs font-mono">{{ p.branch || '—' }}</td>
+                  <td>
+                    <div v-if="databases[p.name] === undefined" class="text-slate-600 text-xs">…</div>
+                    <div v-else-if="!databases[p.name].length" class="text-slate-600 text-xs">none</div>
+                    <div v-else class="flex flex-wrap gap-1">
+                      <RouterLink
+                        v-for="db in databases[p.name]"
+                        :key="db.name"
+                        :to="`/project/${p.name}?tab=database`"
+                        class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-bg-secondary border border-border/60 text-slate-400 hover:border-accent/50 hover:text-accent transition-colors truncate max-w-[100px]"
+                        :title="db.name"
+                      >{{ db.name }}</RouterLink>
+                    </div>
+                  </td>
+                  <td class="hidden lg:table-cell">
+                    <a v-if="p.url" :href="`https://${p.url}`" target="_blank" rel="noopener"
+                       class="text-xs text-slate-500 hover:text-accent transition-colors flex items-center gap-1">
+                      <span class="truncate max-w-[140px]">{{ p.url }}</span>
+                      <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                      </svg>
+                    </a>
+                    <span v-else class="text-slate-600 text-xs">—</span>
+                  </td>
+                  <td class="text-right">
+                    <div class="flex items-center justify-end gap-1.5">
+                      <RouterLink :to="`/project/${p.name}`" class="btn btn-ghost btn-sm text-xs">Open</RouterLink>
+                      <button
+                        class="btn btn-ghost btn-sm text-xs"
+                        :disabled="!p.running"
+                        @click="restartProject(p.container)"
+                      >Restart</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- ── Mobile: cards (< md) ─────────────────────────── -->
+          <div class="grid gap-3 md:hidden">
+            <div
+              v-for="(p, rowIdx) in versionProjects"
+              :key="p.name"
+              class="card !p-4 fade-in-row"
+              :style="{ animationDelay: `${rowIdx * 25}ms` }"
+            >
+              <!-- Card top: name + status -->
+              <div class="flex items-start justify-between gap-2 mb-3">
+                <div class="min-w-0">
+                  <RouterLink
+                    :to="`/project/${p.name}`"
+                    class="font-semibold hover:text-accent transition-colors text-sm truncate block"
+                    :class="p.status === 'running' ? 'text-slate-100' : 'text-slate-400'"
+                  >{{ p.name }}</RouterLink>
+                  <div class="flex items-center gap-2 mt-1">
+                    <span v-if="p.branch" class="text-[11px] font-mono text-slate-500 truncate max-w-[140px]">{{ p.branch }}</span>
+                    <span v-if="p.pending_count" class="text-[10px] text-amber-400 font-medium">{{ p.pending_count }} pending</span>
+                  </div>
+                </div>
+                <StatusBadge :status="p.status" class="shrink-0" />
+              </div>
+
+              <!-- Card meta row -->
+              <div class="flex items-center gap-3 mb-3 flex-wrap">
+                <!-- Databases -->
+                <div class="flex flex-wrap gap-1">
+                  <span v-if="databases[p.name] === undefined" class="text-[11px] text-slate-600">Loading…</span>
+                  <span v-else-if="!databases[p.name].length" class="text-[11px] text-slate-600">No databases</span>
+                  <RouterLink
+                    v-else
+                    v-for="db in databases[p.name].slice(0, 3)"
+                    :key="db.name"
+                    :to="`/project/${p.name}?tab=database`"
+                    class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-bg-secondary border border-border/60 text-slate-400 hover:text-accent transition-colors truncate max-w-[100px]"
+                  >{{ db.name }}</RouterLink>
+                  <span v-if="databases[p.name] && databases[p.name].length > 3" class="text-[10px] text-slate-500">
+                    +{{ databases[p.name].length - 3 }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- Card actions -->
+              <div class="flex gap-2 pt-2 border-t border-border/40">
+                <RouterLink :to="`/project/${p.name}`" class="btn btn-primary btn-sm flex-1 text-xs justify-center">Open</RouterLink>
+                <a v-if="p.url" :href="`https://${p.url}`" target="_blank" rel="noopener" class="btn btn-ghost btn-sm px-2.5" title="Open site">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                  </svg>
+                </a>
+                <button
+                  class="btn btn-ghost btn-sm px-2.5"
+                  :disabled="!p.running"
+                  title="Restart"
+                  @click="restartProject(p.container)"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Empty state -->
+        <div v-if="!store.projects.length" class="text-center py-20 text-slate-500">
+          <div class="w-16 h-16 rounded-2xl bg-surface border border-border flex items-center justify-center mx-auto mb-4">
+            <svg class="w-8 h-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+            </svg>
+          </div>
+          <p class="text-sm font-medium text-slate-400">No projects found</p>
+          <p class="text-xs text-slate-600 mt-1">Check the port registry or use New Project to add one.</p>
+        </div>
+
+      </template>
+    </div>
+  </SidebarLayout>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useProjectsStore } from '@/stores/projects'
 import { useNotificationsStore } from '@/stores/notifications'
-import { useConfigStore } from '@/stores/config'
-import ProjectCard from '@/components/ProjectCard.vue'
-import ProjectGroupCard from '@/components/ProjectGroupCard.vue'
-import GroupManagerModal from '@/components/GroupManagerModal.vue'
-import Logo from '@/components/Logo.vue'
+import { api } from '@/api'
+import SidebarLayout from '@/layouts/SidebarLayout.vue'
+import Breadcrumb from '@/components/Breadcrumb.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
+import SectionHeader from '@/components/SectionHeader.vue'
 
 const store = useProjectsStore()
 const notify = useNotificationsStore()
-const config = useConfigStore()
 
-const showGroupManager = ref(false)
+const databases = ref<Record<string, Array<{ name: string; size: string }>>>({})
 
-// All instances (ungrouped + instances inside groups) for the modal dropdowns
-const allInstances = computed(() => {
-  const result = [...store.projects]
-  for (const g of store.groups) {
-    for (const env of ['production', 'staging', 'dev'] as const) {
-      const inst = g.instances[env]
-      if (inst && !result.find(p => p.name === inst.name)) {
-        result.push(inst)
+const runningCount = computed(() => store.projects.filter(p => p.running).length)
+const stoppedCount = computed(() => store.projects.filter(p => !p.running).length)
+
+async function fetchDatabases(projects: typeof store.projects) {
+  await Promise.allSettled(
+    projects.map(async (p) => {
+      if (databases.value[p.name] !== undefined) return
+      try {
+        const res = await api(`/api/db/${p.name}/list`)
+        const data = await res.json()
+        databases.value[p.name] = data.databases || []
+      } catch {
+        databases.value[p.name] = []
       }
-    }
-  }
-  return result
-})
+    })
+  )
+}
 
 onMounted(async () => {
   await store.fetchProjects()
   store.startSSE()
+  fetchDatabases(store.projects)
 })
 
-onUnmounted(() => {
-  store.stopSSE()
-})
+watch(() => store.projects, (projects) => {
+  fetchDatabases(projects)
+}, { deep: false })
+
+onUnmounted(() => store.stopSSE())
 
 async function restartProject(containerName: string) {
   try {
-    const res = await fetch(`/api/restart/${containerName}`, { method: 'POST' })
+    const res = await api(`/api/restart/${containerName}`, { method: 'POST' })
     const data = await res.json()
     notify.add(data.ok ? 'success' : 'error', data.ok ? 'Container restarted' : data.error)
   } catch {
