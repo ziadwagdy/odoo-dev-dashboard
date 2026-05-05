@@ -143,6 +143,61 @@
       </template>
     </div>
 
+    <!-- Submodule branch switch modal -->
+    <div v-if="showSubmoduleBranchModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="closeSubmoduleModal">
+      <div class="card max-w-lg w-full border-accent/30">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-bold text-white">Switch Submodule Branch</h3>
+          <button @click="closeSubmoduleModal" class="text-slate-500 hover:text-white">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          </button>
+        </div>
+        <p class="text-xs text-slate-500 font-mono mb-4">{{ pendingSubmodulePath }}</p>
+        <div v-if="submoduleBranchLoading" class="text-sm text-slate-500 py-4 text-center">Loading branches…</div>
+        <div v-else-if="submoduleBranchData.error" class="text-sm text-red-400">{{ submoduleBranchData.error }}</div>
+        <template v-else>
+          <div class="mb-3">
+            <div class="relative">
+              <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+              <input v-model="submoduleBranchSearch" type="text" placeholder="Search branches…" class="input pl-10 w-full" />
+            </div>
+          </div>
+          <div class="max-h-72 overflow-y-auto space-y-1 mb-4">
+            <div v-for="b in filteredSubmoduleLocal" :key="'l:' + b"
+              class="flex items-center justify-between gap-2 p-2 rounded-lg hover:bg-surface-hover/50 transition-colors">
+              <div class="flex items-center gap-2 min-w-0 flex-1">
+                <span :class="b === submoduleBranchData.current ? 'bg-green-400' : 'bg-slate-600'" class="w-1.5 h-1.5 rounded-full shrink-0" />
+                <span class="font-mono text-sm truncate" :class="b === submoduleBranchData.current ? 'text-white' : 'text-slate-400'">{{ b }}</span>
+                <span v-if="b === submoduleBranchData.current" class="text-xs text-green-400 shrink-0">(current)</span>
+              </div>
+              <button v-if="b !== submoduleBranchData.current" class="btn btn-ghost btn-sm shrink-0" @click="confirmSubmoduleSwitch(b)">Switch</button>
+            </div>
+            <div v-if="filteredSubmoduleRemote.length" class="pt-2 border-t border-white/5">
+              <div class="text-xs text-slate-500 uppercase tracking-wide mb-1 px-2">Remote</div>
+              <div v-for="b in filteredSubmoduleRemote" :key="'r:' + b"
+                class="flex items-center justify-between gap-2 p-2 rounded-lg hover:bg-surface-hover/50 transition-colors">
+                <span class="font-mono text-sm text-slate-500 truncate min-w-0">{{ b }}</span>
+                <button class="btn btn-ghost btn-sm shrink-0" @click="confirmSubmoduleSwitch(b.replace('origin/', ''))">Checkout</button>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- Submodule switch confirm modal -->
+    <div v-if="showSubmoduleConfirmModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="showSubmoduleConfirmModal = false">
+      <div class="card max-w-md w-full border-accent/30">
+        <h3 class="text-lg font-bold text-white mb-2">Switch Submodule Branch?</h3>
+        <p class="text-sm text-slate-400 mb-1">Submodule: <span class="font-mono text-xs text-slate-300">{{ pendingSubmodulePath }}</span></p>
+        <p class="text-sm text-slate-400">Branch: <span class="font-mono text-accent">{{ pendingSubmoduleBranch }}</span></p>
+        <div class="flex gap-3 justify-end mt-4">
+          <button @click="showSubmoduleConfirmModal = false" class="btn btn-ghost">Cancel</button>
+          <button @click="doSubmoduleSwitch" class="btn btn-primary">Switch Branch</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Submodules -->
     <div class="card mb-4">
       <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-3">
@@ -153,25 +208,29 @@
         </button>
       </div>
       <div v-if="!submodules.length" class="text-sm text-slate-500">No submodules.</div>
-      <div v-else class="overflow-x-auto -mx-4 sm:mx-0">
-        <div class="inline-block min-w-full px-4 sm:px-0">
-          <table class="table-base">
-            <thead><tr><th>Path</th><th>Commit</th><th>Status</th></tr></thead>
-            <tbody>
-              <tr v-for="s in submodules" :key="s.path">
-                <td class="font-mono text-[10px] sm:text-xs">{{ s.path }}</td>
-                <td class="font-mono text-[10px] sm:text-xs text-slate-500">{{ s.commit }}</td>
-                <td>
-                  <span class="text-xs px-1.5 py-0.5 rounded"
-                    :class="{
-                      'bg-green-900/40 text-green-400': s.status === 'clean',
-                      'bg-amber-900/40 text-amber-400': s.status === 'modified',
-                      'bg-red-900/40 text-red-400': s.status === 'behind',
-                    }">{{ s.status }}</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+      <div v-else class="space-y-2">
+        <div v-for="s in submodules" :key="s.path" class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-lg bg-surface-hover/30">
+          <div class="flex flex-col gap-1 min-w-0 flex-1">
+            <span class="font-mono text-xs text-slate-300 truncate">{{ s.path }}</span>
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-mono text-[10px] text-slate-500">{{ s.commit }}</span>
+              <span v-if="s.branch" class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent font-mono">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path></svg>
+                {{ s.branch }}
+              </span>
+              <span v-else class="text-[10px] text-slate-600 italic">detached HEAD</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded"
+                :class="{
+                  'bg-green-900/40 text-green-400': s.status === 'clean',
+                  'bg-amber-900/40 text-amber-400': s.status === 'modified',
+                  'bg-red-900/40 text-red-400': s.status === 'behind',
+                }">{{ s.status }}</span>
+            </div>
+          </div>
+          <button v-if="props.canSwitch !== false" class="btn btn-ghost btn-sm shrink-0 self-start sm:self-center" @click="openSubmoduleBranchModal(s.path)">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+            Switch Branch
+          </button>
         </div>
       </div>
     </div>
@@ -192,7 +251,7 @@ const emit = defineEmits<{
 const notify = useNotificationsStore()
 
 interface BranchData { local: string[]; remote: string[]; current: string | null; error?: string }
-interface Submodule { path: string; commit: string; status: string }
+interface Submodule { path: string; commit: string; status: string; branch: string | null }
 
 const data = ref<BranchData>({ local: [], remote: [], current: null })
 const submodules = ref<Submodule[]>([])
@@ -204,6 +263,14 @@ const showConfirmModal = ref(false)
 const showRestartModal = ref(false)
 const pendingBranch = ref('')
 
+const showSubmoduleBranchModal = ref(false)
+const showSubmoduleConfirmModal = ref(false)
+const pendingSubmodulePath = ref('')
+const pendingSubmoduleBranch = ref('')
+const submoduleBranchLoading = ref(false)
+const submoduleBranchData = ref<BranchData>({ local: [], remote: [], current: null })
+const submoduleBranchSearch = ref('')
+
 const filteredLocal = computed(() => {
   if (!searchQuery.value) return data.value.local
   const query = searchQuery.value.toLowerCase()
@@ -214,6 +281,18 @@ const filteredRemote = computed(() => {
   if (!searchQuery.value) return data.value.remote
   const query = searchQuery.value.toLowerCase()
   return data.value.remote.filter(b => b.toLowerCase().includes(query))
+})
+
+const filteredSubmoduleLocal = computed(() => {
+  if (!submoduleBranchSearch.value) return submoduleBranchData.value.local
+  const q = submoduleBranchSearch.value.toLowerCase()
+  return submoduleBranchData.value.local.filter(b => b.toLowerCase().includes(q))
+})
+
+const filteredSubmoduleRemote = computed(() => {
+  if (!submoduleBranchSearch.value) return submoduleBranchData.value.remote
+  const q = submoduleBranchSearch.value.toLowerCase()
+  return submoduleBranchData.value.remote.filter(b => b.toLowerCase().includes(q))
 })
 
 watch(() => props.active, (v) => { if (v && !loaded.value) load() }, { immediate: true })
@@ -285,6 +364,52 @@ async function updateSubmodules() {
     const msg = JSON.parse(evt.data)
     switchLines.value.push(parseLine(msg.line ?? ''))
     if (msg.done) { source.close(); loaded.value = false; load() }
+  }
+  source.onerror = () => source.close()
+}
+
+async function openSubmoduleBranchModal(subPath: string) {
+  pendingSubmodulePath.value = subPath
+  submoduleBranchSearch.value = ''
+  submoduleBranchData.value = { local: [], remote: [], current: null }
+  showSubmoduleBranchModal.value = true
+  submoduleBranchLoading.value = true
+  const res = await api(`/api/git/${props.projectName}/submodule-branches?path=${encodeURIComponent(subPath)}`)
+  submoduleBranchData.value = await res.json()
+  submoduleBranchLoading.value = false
+}
+
+function closeSubmoduleModal() {
+  showSubmoduleBranchModal.value = false
+}
+
+function confirmSubmoduleSwitch(branch: string) {
+  pendingSubmoduleBranch.value = branch
+  showSubmoduleBranchModal.value = false
+  showSubmoduleConfirmModal.value = true
+}
+
+async function doSubmoduleSwitch() {
+  showSubmoduleConfirmModal.value = false
+  switchLines.value = []
+  const res = await api(`/api/git/${props.projectName}/submodule-switch`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sub_path: pendingSubmodulePath.value, branch: pendingSubmoduleBranch.value }),
+  })
+  const d = await res.json()
+  if (!d.ok) { notify.add('error', d.error); return }
+
+  const source = new EventSource(d.stream_url)
+  source.onmessage = (evt) => {
+    const msg = JSON.parse(evt.data)
+    switchLines.value.push(parseLine(msg.line ?? ''))
+    if (msg.done) {
+      source.close()
+      loaded.value = false
+      load()
+      emit('branch-changed', pendingSubmoduleBranch.value)
+      showRestartModal.value = true
+    }
   }
   source.onerror = () => source.close()
 }

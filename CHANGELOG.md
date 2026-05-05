@@ -5,6 +5,15 @@ Format: [version] — date
 
 ---
 
+## [1.7.1] — 2026-05-05
+
+### Added
+- **Submodule branch visibility** — the Submodules section in the Branch tab now shows which branch each submodule is on, or "detached HEAD" if not on any branch.
+- **Per-submodule branch switching** — each submodule row has a "Switch Branch" button that opens a branch picker modal (local + remote, searchable) with a confirm dialog and the same restart-container prompt as the main repo switch flow. Backend: new `list_submodule_branches` and `switch_submodule_branch` in `git_service.py`; new `/api/git/<project>/submodule-branches` and `/api/git/<project>/submodule-switch` endpoints; new `/stream/submodule-switch/<key>` SSE stream.
+- **Submodule list redesign** — replaced the flat table with a card-per-submodule layout showing path, commit, branch pill, and status badge together.
+
+---
+
 ## [1.7.0] — 2026-04-28
 
 ### Added

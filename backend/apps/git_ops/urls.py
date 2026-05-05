@@ -7,6 +7,8 @@ urlpatterns = [
     path('<str:project>/switch', views.git_switch),
     path('<str:project>/submodules', views.git_submodules),
     path('<str:project>/submodule-update', views.git_submodule_update),
+    path('<str:project>/submodule-branches', views.git_submodule_branches),
+    path('<str:project>/submodule-switch', views.git_submodule_switch),
     path('<str:project>/pull', views.git_pull_view),
     path('webhook/github', github_webhook),
 ]

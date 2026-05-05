@@ -369,10 +369,48 @@ def get_submodule_status(folder):
             commit = parts[0] if parts else ''
             sub_path = parts[1] if len(parts) > 1 else ''
             status = 'modified' if status_char == '+' else 'behind' if status_char == '-' else 'clean'
-            submodules.append({'path': sub_path, 'commit': commit[:8], 'status': status})
+            sub_abs = os.path.join(path, sub_path)
+            branch_result = _git(sub_abs, 'rev-parse', '--abbrev-ref', 'HEAD', timeout=3)
+            branch = branch_result.stdout.strip()
+            if not branch or branch == 'HEAD':
+                branch = None
+            submodules.append({'path': sub_path, 'commit': commit[:8], 'status': status, 'branch': branch})
         return submodules
     except Exception:
         return []
+
+
+def list_submodule_branches(folder, sub_path):
+    path = os.path.join(_repo_path(folder), sub_path)
+    if not os.path.isdir(path):
+        return {'error': 'submodule not found'}
+    try:
+        _git(path, 'fetch', '--all', timeout=30)
+        current_raw = _git(path, 'rev-parse', '--abbrev-ref', 'HEAD').stdout.strip()
+        current = current_raw if current_raw and current_raw != 'HEAD' else None
+        local_out = _git(path, 'branch', '--format=%(refname:short)').stdout.strip()
+        remote_out = _git(path, 'branch', '-r', '--format=%(refname:short)').stdout.strip()
+        local = [b for b in local_out.splitlines() if b]
+        remote = [b for b in remote_out.splitlines() if b and 'HEAD' not in b]
+        return {'local': local, 'remote': remote, 'current': current}
+    except Exception as e:
+        return {'error': str(e)}
+
+
+def switch_submodule_branch(folder, sub_path, branch, output_queue):
+    path = os.path.join(_repo_path(folder), sub_path)
+    try:
+        result = _git(path, 'checkout', branch, timeout=30)
+        if result.returncode != 0:
+            result = _git(path, 'checkout', '-b', branch, f'origin/{branch}', timeout=30)
+        output = (result.stdout + result.stderr).strip()
+        for line in output.splitlines():
+            output_queue.put(line)
+        output_queue.put(f'--- exit code: {result.returncode} ---')
+    except Exception as e:
+        output_queue.put(f'Error: {e}')
+    finally:
+        output_queue.put(None)
 
 
 def update_submodules(folder, output_queue):

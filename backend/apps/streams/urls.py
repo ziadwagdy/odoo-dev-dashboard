@@ -9,6 +9,7 @@ urlpatterns = [
     path('module-update/<str:project>/<str:dbname>/<str:module_name>', views.stream_module_update),
     path('branch-switch/<str:project>', views.stream_branch_switch),
     path('submodule-update/<str:project>', views.stream_submodule_update),
+    path('submodule-switch/<path:key>', views.stream_submodule_switch),
     path('git-pull/<str:project>', views.stream_git_pull),
     path('health/host', views.stream_health_host),
     path('health/containers', views.stream_health_containers),

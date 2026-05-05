@@ -22,7 +22,7 @@ async def _allowed_names(user):
     )()
 from services.docker_service import get_container_status, get_container_logs, exec_in_container, get_docker_client
 from services.health_service import get_host_stats, get_all_container_stats
-from state import deploy_queues, branch_switch_queues, submodule_queues, pull_queues
+from state import deploy_queues, branch_switch_queues, submodule_queues, submodule_switch_queues, pull_queues
 
 
 def _sse(data: dict) -> str:
@@ -232,6 +232,32 @@ async def stream_submodule_update(request, project):
                     break
         finally:
             submodule_queues.pop(project, None)
+    return _sse_response(generate())
+
+
+async def stream_submodule_switch(request, key):
+    import urllib.parse
+    decoded_key = urllib.parse.unquote(key)
+
+    async def generate():
+        loop = asyncio.get_running_loop()
+        q = submodule_switch_queues.get(decoded_key)
+        if q is None:
+            yield _sse({'line': 'No submodule switch in progress.', 'done': True})
+            return
+        try:
+            while True:
+                try:
+                    line = await loop.run_in_executor(None, lambda: q.get(timeout=60))
+                    if line is None:
+                        yield _sse({'line': '', 'done': True})
+                        break
+                    yield _sse({'line': line, 'done': False})
+                except queue_module.Empty:
+                    yield _sse({'line': '(timeout)', 'done': True})
+                    break
+        finally:
+            submodule_switch_queues.pop(decoded_key, None)
     return _sse_response(generate())
 
 
