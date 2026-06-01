@@ -5,6 +5,13 @@ Format: [version] — date
 
 ---
 
+## [1.7.2] — 2026-06-01
+
+### Changed
+- **Repo URL is now optional on onboard** — leaving the field blank creates an empty `/mnt/project-addons` directory and proceeds with a plain Odoo install (no custom modules). Useful for creating a clean Odoo instance to restore a database into. Frontend shows "optional" badge and updated hint text; backend no longer rejects missing `repo_url`.
+
+---
+
 ## [1.7.1] — 2026-05-05
 
 ### Added

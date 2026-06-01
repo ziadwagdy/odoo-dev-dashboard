@@ -47,7 +47,10 @@
         <div>
           <label class="block text-sm font-semibold text-slate-300 mb-2">
             Repository URL
-            <span class="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-amber-500/15 text-amber-400 border border-amber-500/30">
+            <span class="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-slate-500/15 text-slate-400 border border-slate-500/30">
+              optional
+            </span>
+            <span class="ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-amber-500/15 text-amber-400 border border-amber-500/30">
               SSH only
             </span>
           </label>
@@ -66,7 +69,7 @@
               </svg>
               <span class="text-xs text-red-400">Must be SSH format — <code class="font-mono">git@github.com:ORG/REPO.git</code></span>
             </template>
-            <template v-else-if="repoUrlValid">
+            <template v-else-if="form.repoUrl && repoUrlValid">
               <svg class="w-3.5 h-3.5 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
               </svg>
@@ -76,7 +79,7 @@
               <svg class="w-3.5 h-3.5 text-slate-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
               </svg>
-              <span class="text-xs text-slate-500">HTTPS URLs won't work — use the SSH clone URL from GitHub</span>
+              <span class="text-xs text-slate-500">Leave blank for a plain Odoo install with no custom modules</span>
             </template>
           </div>
         </div>
@@ -286,8 +289,7 @@ watch(() => form.version, (v) => {
 async function validateAndProceed() {
   Object.keys(errors).forEach(k => (errors as any)[k] = '')
   if (!form.projectName) { errors.projectName = 'Project name is required'; return }
-  if (!form.repoUrl)     { errors.repoUrl = 'Repository URL is required'; return }
-  if (!repoUrlValid.value) { errors.repoUrl = 'Must be SSH format: git@github.com:ORG/REPO.git'; return }
+  if (form.repoUrl && !repoUrlValid.value) { errors.repoUrl = 'Must be SSH format: git@github.com:ORG/REPO.git'; return }
   if (!form.version)     { errors.version = 'Odoo version is required'; return }
   if (!form.subdomain)   { errors.subdomain = 'Subdomain is required'; return }
 

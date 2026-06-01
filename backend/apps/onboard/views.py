@@ -80,7 +80,7 @@ def start_onboard(request):
     odoo_port    = data.get('odoo_port')
     db_port      = data.get('db_port')
 
-    if not all([project_name, repo_url, version, subdomain]):
+    if not all([project_name, version, subdomain]):
         return JsonResponse({'success': False, 'error': 'Missing required fields'}, status=400)
 
     if project_name in onboard_queues:
@@ -174,13 +174,15 @@ def start_onboard(request):
             onboard_service.configure_cloudflare(subdomain, emit)
 
             # ── done ───────────────────────────────────────────────
+            repo_detail = repo_url or 'no repo'
             AuditLog.objects.create(project=project_name, action='onboard',
-                                    detail=f'{repo_url} (v{version})', outcome='success', user=username)
+                                    detail=f'{repo_detail} (v{version})', outcome='success', user=username)
             emit({'type': 'done', 'success': True, 'url': f'https://{subdomain}.zedev.org'})
 
         except Exception as e:
+            repo_detail = repo_url or 'no repo'
             AuditLog.objects.create(project=project_name, action='onboard',
-                                    detail=f'{repo_url} (v{version})', outcome='failed', user=username)
+                                    detail=f'{repo_detail} (v{version})', outcome='failed', user=username)
             emit({'type': 'log', 'text': str(e), 'error': True})
             emit({'type': 'done', 'success': False})
             # Clean up partial project directory so re-onboarding is possible

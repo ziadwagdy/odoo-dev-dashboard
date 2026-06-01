@@ -142,6 +142,12 @@ def clone_repository(repo_url, project_name, emit):
     repo_dir    = project_dir / 'repo'
     try:
         project_dir.mkdir(parents=True, exist_ok=True)
+
+        if not repo_url:
+            repo_dir.mkdir(exist_ok=True)
+            _log(emit, 'No repository URL provided — created empty addons directory')
+            return True, str(repo_dir)
+
         _log(emit, f'Cloning {repo_url}…')
         result = subprocess.run(
             ['git', 'clone', '--recurse-submodules', repo_url, str(repo_dir)],
