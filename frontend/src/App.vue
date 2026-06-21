@@ -35,7 +35,7 @@
         </div>
       </TransitionGroup>
     </div>
-    <RouterView />
+    <RouterView :key="$route.fullPath" />
   </div>
 </template>
 

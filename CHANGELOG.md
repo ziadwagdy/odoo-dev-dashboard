@@ -5,6 +5,13 @@ Format: [version] — date
 
 ---
 
+## [1.7.3] — 2026-06-21
+
+### Fixed
+- **Sidebar project navigation** — clicking a project in the sidebar while already on another project's page now correctly loads the new project. Root cause: `RouterView` was reusing the `ProjectDetailView` component across same-pattern routes, preventing `onMounted` from re-running. Fixed by adding `:key="$route.fullPath"` to `RouterView` in `App.vue`.
+
+---
+
 ## [1.7.2] — 2026-06-01
 
 ### Changed
