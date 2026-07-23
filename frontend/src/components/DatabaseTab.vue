@@ -74,6 +74,7 @@
           <input type="file" accept=".dump,.zip" class="hidden" @change="uploadRestore" />
         </label>
       </div>
+      <p class="text-xs text-slate-500 mb-3">Restored and duplicated databases are automatically neutralized (no outgoing emails, crons, or payment calls).</p>
       <div v-if="!backups.length" class="text-sm text-slate-500">No backup files.</div>
       <template v-else>
         <!-- Mobile: vertical card layout -->
@@ -291,7 +292,7 @@ function duplicate(dbname: string) {
       })
       const data = await res.json()
       modal.value = null
-      if (data.ok) { notify.add('success', 'Duplicated'); loadDbs() }
+      if (data.ok) { notify.add('success', 'Duplicated and neutralized'); loadDbs() }
       else notify.add('error', data.error || 'Failed')
     }
   }
@@ -326,7 +327,7 @@ async function restoreFrom(filename: string) {
     body: JSON.stringify({ filename }),
   })
   const data = await res.json()
-  notify.add(data.ok ? 'success' : 'error', data.ok ? 'Restored successfully' : data.error)
+  notify.add(data.ok ? 'success' : 'error', data.ok ? 'Restored and neutralized' : data.error)
   if (data.ok) loadDbs()
 }
 
@@ -340,7 +341,7 @@ async function uploadRestore(evt: Event) {
   notify.add('info', 'Uploading and restoring…')
   const res = await api(`/api/db/${props.projectName}/restore/${dbname}`, { method: 'POST', body: form })
   const data = await res.json()
-  notify.add(data.ok ? 'success' : 'error', data.ok ? 'Restored successfully' : data.error)
+  notify.add(data.ok ? 'success' : 'error', data.ok ? 'Restored and neutralized' : data.error)
   if (data.ok) loadDbs()
 }
 </script>

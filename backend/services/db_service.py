@@ -5,6 +5,8 @@ from datetime import datetime
 import psycopg2
 from django.conf import settings
 
+from .docker_service import exec_in_container_sync
+
 
 def _connect(db_port, dbname='postgres'):
     return psycopg2.connect(
@@ -52,8 +54,8 @@ def backup_database(db_port, dbname, backup_dir):
     return filepath, filename
 
 
-def restore_database(db_port, dbname, backup_filepath):
-    """Restore a .dump file into dbname (drops and recreates)."""
+def restore_database(db_port, dbname, backup_filepath, project_name=None):
+    """Restore a .dump file into dbname (drops and recreates), then neutralize it."""
     # Drop existing connections and database
     try:
         conn = _connect(db_port)
@@ -80,6 +82,9 @@ def restore_database(db_port, dbname, backup_filepath):
         # pg_restore exits non-zero even on warnings; only raise if stderr looks fatal
         if 'ERROR' in result.stderr and 'warning' not in result.stderr.lower():
             raise RuntimeError(result.stderr)
+
+    if project_name:
+        neutralize_database(project_name, dbname)
 
 
 def list_backup_files(project, backup_dir):
@@ -112,7 +117,7 @@ def _human_size(b):
     return f'{b:.1f} TB'
 
 
-def duplicate_database(db_port, src, dst):
+def duplicate_database(db_port, src, dst, project_name=None):
     conn = _connect(db_port)
     conn.autocommit = True
     cur = conn.cursor()
@@ -123,6 +128,25 @@ def duplicate_database(db_port, src, dst):
     """, (src,))
     cur.execute(f'CREATE DATABASE "{dst}" TEMPLATE "{src}"')
     conn.close()
+
+    if project_name:
+        neutralize_database(project_name, dst)
+
+
+def neutralize_database(project_name, dbname):
+    """Run Odoo's built-in neutralize command against dbname inside <project>-app.
+
+    Disables outgoing mail servers, cron jobs, payment providers, and other
+    production-facing integrations so a demo/staging copy can't act on the outside
+    world. Mandatory after any restore or duplicate that creates a new database.
+    """
+    exit_code, output = exec_in_container_sync(
+        f'{project_name}-app',
+        f'odoo neutralize -c /etc/odoo/odoo.conf -d {dbname}',
+    )
+    if exit_code != 0:
+        detail = output.decode(errors='replace') if isinstance(output, bytes) else output
+        raise RuntimeError(f'Neutralize failed: {detail}')
 
 
 def drop_database(db_port, dbname):

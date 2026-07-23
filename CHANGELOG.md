@@ -5,6 +5,13 @@ Format: [version] — date
 
 ---
 
+## [1.7.4] — 2026-07-23
+
+### Added
+- **Automatic database neutralization** — restoring or duplicating a database via the Database tab now automatically runs Odoo's built-in `neutralize` command against it (disables outgoing mail servers, cron jobs, payment providers, etc). Backend: `neutralize_database()` in `db_service.py`, invoked from `restore_database()`/`duplicate_database()` via a new `exec_in_container_sync()` helper in `docker_service.py` (needed a real exit code, unlike the streaming `exec_in_container()`). Frontend: DatabaseTab notifications now say "Restored and neutralized" / "Duplicated and neutralized", plus a hint under Backups on Disk. `/onboard` skill documents this as a mandatory step (new Step 14) for any database created outside the dashboard.
+
+---
+
 ## [1.7.3] — 2026-06-21
 
 ### Fixed

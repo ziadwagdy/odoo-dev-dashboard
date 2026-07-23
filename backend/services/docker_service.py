@@ -90,3 +90,18 @@ def exec_in_container(name, cmd):
         return result.exit_code, result.output
     except Exception as e:
         return 1, iter([str(e).encode()])
+
+
+def exec_in_container_sync(name, cmd):
+    """Blocking exec — waits for completion and returns a real exit_code.
+
+    Use this (not exec_in_container) when the caller needs to branch on success/failure;
+    exec_run with stream=True leaves exit_code unset until the generator is drained.
+    """
+    try:
+        client = get_docker_client()
+        container = client.containers.get(name)
+        exit_code, output = container.exec_run(cmd, stream=False, demux=False)
+        return exit_code, output
+    except Exception as e:
+        return 1, str(e).encode()

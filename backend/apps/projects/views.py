@@ -198,8 +198,8 @@ def db_duplicate(request, project, dbname):
     if not new_name:
         return Response({'error': 'new_name required'}, status=400)
     try:
-        duplicate_database(p['db_port'], dbname, new_name)
-        _audit(project, 'db_duplicate', f'{dbname} → {new_name}', user=request.user.username)
+        duplicate_database(p['db_port'], dbname, new_name, project_name=p['name'])
+        _audit(project, 'db_duplicate', f'{dbname} → {new_name} (neutralized)', user=request.user.username)
         return Response({'ok': True})
     except Exception as e:
         _audit(project, 'db_duplicate', f'{dbname} → {new_name}', outcome='failed', user=request.user.username)
@@ -250,8 +250,8 @@ def db_restore(request, project, dbname):  # developer-allowed
             if not os.path.exists(filepath):
                 return Response({'error': 'backup file not found'}, status=404)
             try:
-                restore_database(p['db_port'], dbname, filepath)
-                _audit(project, 'restore', f'{filename} → {dbname}', user=request.user.username)
+                restore_database(p['db_port'], dbname, filepath, project_name=p['name'])
+                _audit(project, 'restore', f'{filename} → {dbname} (neutralized)', user=request.user.username)
                 return Response({'ok': True})
             except Exception as e:
                 _audit(project, 'restore', f'{filename} → {dbname}', outcome='failed', user=request.user.username)
@@ -266,8 +266,8 @@ def db_restore(request, project, dbname):  # developer-allowed
         for chunk in uploaded.chunks():
             f.write(chunk)
     try:
-        restore_database(p['db_port'], dbname, filepath)
-        _audit(project, 'restore', f'{uploaded.name} → {dbname}', user=request.user.username)
+        restore_database(p['db_port'], dbname, filepath, project_name=p['name'])
+        _audit(project, 'restore', f'{uploaded.name} → {dbname} (neutralized)', user=request.user.username)
         return Response({'ok': True})
     except Exception as e:
         _audit(project, 'restore', f'{uploaded.name} → {dbname}', outcome='failed', user=request.user.username)
