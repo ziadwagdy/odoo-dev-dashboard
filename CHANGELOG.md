@@ -8,7 +8,7 @@ Format: [version] — date
 ## [1.7.5] — 2026-07-29
 
 ### Changed
-- **Branches tab — two-column layout for hr-base projects** — the Local/Remote branch lists now render as a 2-column grid (sm breakpoint+) when the project's registry `folder` matches `hr-base` (e.g. `worktrees/hr-base-17`) OR the project has an hr-base submodule (e.g. alif's `cnc-hr-base`), cutting page scroll height roughly in half for the long branch lists. Other projects keep the single-column list. `BranchTab.vue`: `isHrBase` computed checks both `props.folder` and the loaded `submodules` list.
+- **Branches tab — side-by-side layout for hr-base projects** — when the project's registry `folder` matches `hr-base` (e.g. `worktrees/hr-base-17`) OR it has an hr-base submodule (e.g. alif's `cnc-hr-base`), the Branches card (repo's own local/remote branches) and Submodules card now render side by side in a 2-column grid at `lg`+ instead of stacked, so you don't have to scroll past the branch list to reach Submodules. Other projects keep the original stacked layout. `BranchTab.vue`: `isHrBase` computed (checks `props.folder` + loaded `submodules`) toggles a wrapper grid around the two cards; the submodule-branch modals were moved out of that wrapper since they're fixed-position overlays.
 
 ---
 

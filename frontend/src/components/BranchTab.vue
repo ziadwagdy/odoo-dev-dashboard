@@ -61,6 +61,7 @@
       </div>
     </div>
 
+    <div :class="isHrBase ? 'lg:grid lg:grid-cols-2 lg:gap-4 lg:items-start' : ''">
     <div class="card mb-4">
       <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-4">
         <h3 class="text-sm font-semibold text-slate-300">Branches</h3>
@@ -111,7 +112,7 @@
           <div v-if="filteredLocal.length === 0" class="text-sm text-slate-500 py-4 text-center">
             No matching branches
           </div>
-          <div v-else class="space-y-1" :class="{ 'sm:grid sm:grid-cols-2 sm:gap-x-4 sm:space-y-0 sm:[&>*]:mb-1': isHrBase }">
+          <div v-else class="space-y-1">
             <div v-for="b in filteredLocal" :key="b"
               class="flex items-center justify-between gap-2 p-2 rounded-lg hover:bg-surface-hover/50 transition-colors min-w-0">
               <div class="flex items-center gap-2 min-w-0 flex-1">
@@ -132,7 +133,7 @@
           <div v-if="filteredRemote.length === 0" class="text-sm text-slate-500 py-4 text-center">
             No matching branches
           </div>
-          <div v-else class="space-y-1" :class="{ 'sm:grid sm:grid-cols-2 sm:gap-x-4 sm:space-y-0 sm:[&>*]:mb-1': isHrBase }">
+          <div v-else class="space-y-1">
             <div v-for="b in filteredRemote" :key="b"
               class="flex items-center justify-between gap-2 p-2 rounded-lg hover:bg-surface-hover/50 transition-colors min-w-0">
               <span class="font-mono text-sm text-slate-500 truncate min-w-0" :title="b">{{ b }}</span>
@@ -141,6 +142,44 @@
           </div>
         </div>
       </template>
+    </div>
+
+    <!-- Submodules -->
+    <div class="card mb-4">
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-3">
+        <h3 class="text-sm font-semibold text-slate-300">Submodules</h3>
+        <button class="btn btn-ghost btn-sm w-full sm:w-auto inline-flex items-center gap-1.5 justify-center" @click="updateSubmodules">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+          Update All
+        </button>
+      </div>
+      <div v-if="!submodules.length" class="text-sm text-slate-500">No submodules.</div>
+      <div v-else class="space-y-2">
+        <div v-for="s in submodules" :key="s.path" class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-lg bg-surface-hover/30">
+          <div class="flex flex-col gap-1 min-w-0 flex-1">
+            <span class="font-mono text-xs text-slate-300 truncate">{{ s.path }}</span>
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-mono text-[10px] text-slate-500">{{ s.commit }}</span>
+              <span v-if="s.branch" class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent font-mono">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path></svg>
+                {{ s.branch }}
+              </span>
+              <span v-else class="text-[10px] text-slate-600 italic">detached HEAD</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded"
+                :class="{
+                  'bg-green-900/40 text-green-400': s.status === 'clean',
+                  'bg-amber-900/40 text-amber-400': s.status === 'modified',
+                  'bg-red-900/40 text-red-400': s.status === 'behind',
+                }">{{ s.status }}</span>
+            </div>
+          </div>
+          <button v-if="props.canSwitch !== false" class="btn btn-ghost btn-sm shrink-0 self-start sm:self-center" @click="openSubmoduleBranchModal(s.path)">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+            Switch Branch
+          </button>
+        </div>
+      </div>
+    </div>
     </div>
 
     <!-- Submodule branch switch modal -->
@@ -194,43 +233,6 @@
         <div class="flex gap-3 justify-end mt-4">
           <button @click="showSubmoduleConfirmModal = false" class="btn btn-ghost">Cancel</button>
           <button @click="doSubmoduleSwitch" class="btn btn-primary">Switch Branch</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Submodules -->
-    <div class="card mb-4">
-      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-3">
-        <h3 class="text-sm font-semibold text-slate-300">Submodules</h3>
-        <button class="btn btn-ghost btn-sm w-full sm:w-auto inline-flex items-center gap-1.5 justify-center" @click="updateSubmodules">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-          Update All
-        </button>
-      </div>
-      <div v-if="!submodules.length" class="text-sm text-slate-500">No submodules.</div>
-      <div v-else class="space-y-2">
-        <div v-for="s in submodules" :key="s.path" class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-lg bg-surface-hover/30">
-          <div class="flex flex-col gap-1 min-w-0 flex-1">
-            <span class="font-mono text-xs text-slate-300 truncate">{{ s.path }}</span>
-            <div class="flex items-center gap-2 flex-wrap">
-              <span class="font-mono text-[10px] text-slate-500">{{ s.commit }}</span>
-              <span v-if="s.branch" class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent font-mono">
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path></svg>
-                {{ s.branch }}
-              </span>
-              <span v-else class="text-[10px] text-slate-600 italic">detached HEAD</span>
-              <span class="text-[10px] px-1.5 py-0.5 rounded"
-                :class="{
-                  'bg-green-900/40 text-green-400': s.status === 'clean',
-                  'bg-amber-900/40 text-amber-400': s.status === 'modified',
-                  'bg-red-900/40 text-red-400': s.status === 'behind',
-                }">{{ s.status }}</span>
-            </div>
-          </div>
-          <button v-if="props.canSwitch !== false" class="btn btn-ghost btn-sm shrink-0 self-start sm:self-center" @click="openSubmoduleBranchModal(s.path)">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
-            Switch Branch
-          </button>
         </div>
       </div>
     </div>
