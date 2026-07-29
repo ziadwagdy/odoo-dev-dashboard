@@ -5,6 +5,13 @@ Format: [version] — date
 
 ---
 
+## [1.7.5] — 2026-07-29
+
+### Changed
+- **Branches tab — two-column layout for hr-base projects** — the Local/Remote branch lists now render as a 2-column grid (sm breakpoint+) when the project's registry `folder` matches `hr-base` (e.g. `worktrees/hr-base-17`), cutting page scroll height roughly in half for the long branch lists on the hr-base repos. Other projects keep the single-column list. `BranchTab.vue`: new `isHrBase` computed checked against `props.folder`.
+
+---
+
 ## [1.7.4] — 2026-07-23
 
 ### Added

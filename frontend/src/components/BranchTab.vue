@@ -111,7 +111,7 @@
           <div v-if="filteredLocal.length === 0" class="text-sm text-slate-500 py-4 text-center">
             No matching branches
           </div>
-          <div v-else class="space-y-1">
+          <div v-else class="space-y-1" :class="{ 'sm:grid sm:grid-cols-2 sm:gap-x-4 sm:space-y-0 sm:[&>*]:mb-1': isHrBase }">
             <div v-for="b in filteredLocal" :key="b"
               class="flex items-center justify-between gap-2 p-2 rounded-lg hover:bg-surface-hover/50 transition-colors min-w-0">
               <div class="flex items-center gap-2 min-w-0 flex-1">
@@ -132,7 +132,7 @@
           <div v-if="filteredRemote.length === 0" class="text-sm text-slate-500 py-4 text-center">
             No matching branches
           </div>
-          <div v-else class="space-y-1">
+          <div v-else class="space-y-1" :class="{ 'sm:grid sm:grid-cols-2 sm:gap-x-4 sm:space-y-0 sm:[&>*]:mb-1': isHrBase }">
             <div v-for="b in filteredRemote" :key="b"
               class="flex items-center justify-between gap-2 p-2 rounded-lg hover:bg-surface-hover/50 transition-colors min-w-0">
               <span class="font-mono text-sm text-slate-500 truncate min-w-0" :title="b">{{ b }}</span>
@@ -270,6 +270,8 @@ const pendingSubmoduleBranch = ref('')
 const submoduleBranchLoading = ref(false)
 const submoduleBranchData = ref<BranchData>({ local: [], remote: [], current: null })
 const submoduleBranchSearch = ref('')
+
+const isHrBase = computed(() => !!props.folder && /hr[-_]base/i.test(props.folder))
 
 const filteredLocal = computed(() => {
   if (!searchQuery.value) return data.value.local
