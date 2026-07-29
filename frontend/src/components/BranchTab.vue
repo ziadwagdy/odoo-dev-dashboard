@@ -271,7 +271,10 @@ const submoduleBranchLoading = ref(false)
 const submoduleBranchData = ref<BranchData>({ local: [], remote: [], current: null })
 const submoduleBranchSearch = ref('')
 
-const isHrBase = computed(() => !!props.folder && /hr[-_]base/i.test(props.folder))
+const isHrBase = computed(() =>
+  (!!props.folder && /hr[-_]base/i.test(props.folder)) ||
+  submodules.value.some(s => /hr[-_]base/i.test(s.path))
+)
 
 const filteredLocal = computed(() => {
   if (!searchQuery.value) return data.value.local
