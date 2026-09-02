@@ -5,6 +5,18 @@ Format: [version] — date
 
 ---
 
+## [1.7.7] — 2026-09-02
+
+### Changed
+- **Dashboard reaches project databases over a shared `odoo-dbnet` docker network** instead of via host-published Postgres ports. `db_service._db_endpoint()` resolves a project's registry `db_port` to `(<project>-db, 5432)` and connects by container name; `_connect`, `backup_database` and `restore_database` all use it. Falls back to `settings.DB_HOST` + the given port when a project can't be resolved.
+- **`nginx` now binds `127.0.0.1:${PORT}` only** (was `0.0.0.0`). Public access is unchanged — Cloudflare Tunnel → host Nginx (`dashboard.zedev.org`) → `127.0.0.1:8892` — but the dashboard (root, `docker.sock`, `~/.ssh`) is no longer reachable by direct IP from the internet.
+- **`backend` joined to `odoo-dbnet`** (external) alongside `default`.
+
+### Security
+- Context: a cryptominer was planted in a project's Postgres container on 2026-09-02 via an exposed `172.17.0.1:15xxx` port + `odoo`/`odoo` superuser (`COPY … FROM PROGRAM`). Onboard template (`onboard_service.py`) now generates DB ports on `127.0.0.1` and attaches new `db-*` services to `odoo-dbnet`.
+
+---
+
 ## [1.7.6] — 2026-08-27
 
 ### Added

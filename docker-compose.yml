@@ -41,6 +41,12 @@ services:
       - "host.docker.internal:host-gateway"
     expose:
       - "8000"
+    # `default` keeps redis/frontend/nginx reachable; `odoo-dbnet` is the shared
+    # network that carries traffic to every <project>-db container (port 5432)
+    # so the project Postgres ports no longer need to be published to the host.
+    networks:
+      - default
+      - odoo-dbnet
 
   frontend:
     build:
@@ -56,10 +62,18 @@ services:
     depends_on:
       - backend
       - frontend
+    # Bind to loopback only. Public access is via Cloudflare Tunnel ->
+    # host Nginx (dashboard.zedev.org) -> upstream 127.0.0.1:8892.
+    # Publishing on 0.0.0.0 exposed the dashboard (root, docker.sock, ~/.ssh) to the internet.
     ports:
-      - "${PORT:-8892}:80"
+      - "127.0.0.1:${PORT:-8892}:80"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+
+networks:
+  default:
+  odoo-dbnet:
+    external: true
 
 volumes:
   dashboard-data:

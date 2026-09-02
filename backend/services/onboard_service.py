@@ -291,7 +291,12 @@ limit_time_real = 1200
     volumes:
       - db-data:/var/lib/postgresql/data
     ports:
-      - "172.17.0.1:{db_port}:5432"
+      # Loopback only (host `psql` convenience). The dashboard reaches this DB
+      # by container name on the shared `odoo-dbnet` network, not via this port.
+      - "127.0.0.1:{db_port}:5432"
+    networks:
+      - default
+      - odoo-dbnet
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U odoo"]
       interval: 10s
@@ -313,6 +318,11 @@ limit_time_real = 1200
       - HOST=db-{project_name}
       - USER=odoo
       - PASSWORD=odoo
+
+networks:
+  default:
+  odoo-dbnet:
+    external: true
 
 volumes:
   db-data:

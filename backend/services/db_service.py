@@ -6,12 +6,32 @@ import psycopg2
 from django.conf import settings
 
 from .docker_service import exec_in_container_sync
+from .registry import read_registry
+
+
+def _db_endpoint(db_port):
+    """Resolve a project's registry ``db_port`` to a direct ``(host, port)``.
+
+    The project Postgres containers are reachable by container name
+    (``<project>-db``) on the shared ``odoo-dbnet`` docker network, on the
+    internal port 5432 — they are no longer published to the host bridge.
+    Falls back to ``settings.DB_HOST`` + the given port if the project can't
+    be resolved (registry missing, tests, ad-hoc port).
+    """
+    try:
+        for p in read_registry():
+            if str(p.get('db_port')) == str(db_port):
+                return f"{p['name']}-db", 5432
+    except Exception:
+        pass
+    return settings.DB_HOST, int(db_port)
 
 
 def _connect(db_port, dbname='postgres'):
+    host, port = _db_endpoint(db_port)
     return psycopg2.connect(
-        host=settings.DB_HOST,
-        port=int(db_port),
+        host=host,
+        port=port,
         user=settings.DB_USER,
         password=settings.DB_PASSWORD,
         dbname=dbname,
@@ -43,9 +63,10 @@ def backup_database(db_port, dbname, backup_dir):
     ts = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
     filename = f'{dbname}-{ts}.dump'
     filepath = os.path.join(backup_dir, filename)
+    host, port = _db_endpoint(db_port)
     env = {**os.environ, 'PGPASSWORD': settings.DB_PASSWORD}
     result = subprocess.run(
-        ['pg_dump', '-h', settings.DB_HOST, '-p', str(db_port),
+        ['pg_dump', '-h', host, '-p', str(port),
          '-U', settings.DB_USER, '-F', 'c', '-f', filepath, dbname],
         capture_output=True, text=True, env=env, timeout=300,
     )
@@ -72,9 +93,10 @@ def restore_database(db_port, dbname, backup_filepath, project_name=None):
     except Exception as e:
         raise RuntimeError(f'Failed to prepare database: {e}')
 
+    host, port = _db_endpoint(db_port)
     env = {**os.environ, 'PGPASSWORD': settings.DB_PASSWORD}
     result = subprocess.run(
-        ['pg_restore', '-h', settings.DB_HOST, '-p', str(db_port),
+        ['pg_restore', '-h', host, '-p', str(port),
          '-U', settings.DB_USER, '-d', dbname, '--no-owner', '--no-acl', backup_filepath],
         capture_output=True, text=True, env=env, timeout=600,
     )
