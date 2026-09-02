@@ -5,6 +5,13 @@ Format: [version] — date
 
 ---
 
+## [1.7.6] — 2026-08-27
+
+### Added
+- **Manual "Neutralize" button on the Database tab** — a standalone Neutralize action next to Backup/Duplicate/Drop for each database, so DBs that land on the server outside the dashboard's own Restore/Duplicate flow (manual `pg_restore`, Odoo's own `/web/database/manager`, fresh installs) can be neutralized without SSH. Backend: `db_neutralize` view in `apps/projects/views.py` calling the existing `neutralize_database()` in `db_service.py` (unchanged), new route `POST /api/db/<project>/neutralize/<dbname>`. Frontend: `neutralize()` in `DatabaseTab.vue` opens a confirm modal (no text input needed — modal now conditionally renders its input field only when `modal.placeholder` is set) then POSTs and shows a toast.
+
+---
+
 ## [1.7.5] — 2026-07-29
 
 ### Changed

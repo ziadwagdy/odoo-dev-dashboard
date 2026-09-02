@@ -13,6 +13,7 @@ urlpatterns = [
     path('db/<str:project>/backup/<str:dbname>', views.db_backup),
     path('db/<str:project>/download/<str:filename>', views.db_download),
     path('db/<str:project>/duplicate/<str:dbname>', views.db_duplicate),
+    path('db/<str:project>/neutralize/<str:dbname>', views.db_neutralize),
     path('db/<str:project>/drop/<str:dbname>', views.db_drop),
     path('db/<str:project>/backups', views.db_backups_list),
     path('db/<str:project>/restore/<str:dbname>', views.db_restore),

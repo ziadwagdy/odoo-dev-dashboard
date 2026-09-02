@@ -24,6 +24,9 @@
               <button class="btn btn-ghost btn-sm p-2 min-h-[44px] min-w-[44px]" @click="duplicate(db.name)" title="Duplicate">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
               </button>
+              <button class="btn btn-ghost btn-sm p-2 min-h-[44px] min-w-[44px]" @click="neutralize(db.name)" title="Neutralize">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+              </button>
               <button class="btn btn-danger btn-sm p-2 min-h-[44px] min-w-[44px]" @click="drop(db.name)" title="Drop">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
               </button>
@@ -48,6 +51,10 @@
                     <button class="btn btn-ghost btn-sm text-xs inline-flex items-center gap-1" @click="duplicate(db.name)">
                       <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
                       Duplicate
+                    </button>
+                    <button class="btn btn-ghost btn-sm text-xs inline-flex items-center gap-1" @click="neutralize(db.name)">
+                      <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                      Neutralize
                     </button>
                     <button class="btn btn-danger btn-sm text-xs inline-flex items-center gap-1" @click="drop(db.name)">
                       <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -171,7 +178,7 @@
       <div class="bg-[#1a1d27] border border-[#2d3148] rounded-xl p-6 w-[calc(100vw-2rem)] max-w-md">
         <h4 class="font-semibold text-white mb-2">{{ modal.title }}</h4>
         <p class="text-sm text-slate-400 mb-4" v-html="modal.body" />
-        <input v-model="modalInput" class="input w-full mb-4" :placeholder="modal.placeholder || ''" />
+        <input v-if="modal.placeholder !== undefined" v-model="modalInput" class="input w-full mb-4" :placeholder="modal.placeholder" />
         <div class="flex gap-2 justify-end">
           <button class="btn btn-ghost" @click="modal = null">Cancel</button>
           <button class="btn btn-primary" @click="modal.confirm()">Confirm</button>
@@ -294,6 +301,21 @@ function duplicate(dbname: string) {
       modal.value = null
       if (data.ok) { notify.add('success', 'Duplicated and neutralized'); loadDbs() }
       else notify.add('error', data.error || 'Failed')
+    }
+  }
+}
+
+function neutralize(dbname: string) {
+  modalInput.value = ''
+  modal.value = {
+    title: `Neutralize "${dbname}"`,
+    body: 'Disables outgoing mail servers, cron jobs, and payment providers on this database so it can\'t act on the outside world. Safe to run again on an already-neutralized DB.',
+    confirm: async () => {
+      modal.value = null
+      notify.add('info', `Neutralizing ${dbname}…`)
+      const res = await api(`/api/db/${props.projectName}/neutralize/${dbname}`, { method: 'POST' })
+      const data = await res.json()
+      notify.add(data.ok ? 'success' : 'error', data.ok ? 'Neutralized' : (data.error || 'Failed'))
     }
   }
 }

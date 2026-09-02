@@ -19,7 +19,7 @@ from services.health_service import get_all_project_storage
 from services.docker_service import get_container_status, restart_container, start_container, stop_container, get_container_logs, get_docker_client
 from services.git_service import get_git_info, get_commit_log, get_current_commit, get_addons_path, git_pull, switch_branch, get_branches_quick
 from services.db_service import (list_databases, backup_database, duplicate_database, drop_database,
-                                  list_modules_grouped, list_backup_files, restore_database)
+                                  list_modules_grouped, list_backup_files, restore_database, neutralize_database)
 from state import deploy_queues, get_deploy_lock
 from .models import DeployHistory, BackupSchedule, AuditLog, UserProjectAssignment
 from .serializers import DeployHistorySerializer, BackupScheduleSerializer, AuditLogSerializer
@@ -203,6 +203,23 @@ def db_duplicate(request, project, dbname):
         return Response({'ok': True})
     except Exception as e:
         _audit(project, 'db_duplicate', f'{dbname} → {new_name}', outcome='failed', user=request.user.username)
+        return Response({'ok': False, 'error': str(e)}, status=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def db_neutralize(request, project, dbname):
+    if not _can_access_project(request.user, project):
+        return Response({'error': 'Access denied'}, status=403)
+    p = get_project(project)
+    if not p:
+        return Response({'error': 'project not found'}, status=404)
+    try:
+        neutralize_database(p['name'], dbname)
+        _audit(project, 'db_neutralize', dbname, user=request.user.username)
+        return Response({'ok': True})
+    except Exception as e:
+        _audit(project, 'db_neutralize', dbname, outcome='failed', user=request.user.username)
         return Response({'ok': False, 'error': str(e)}, status=500)
 
 
