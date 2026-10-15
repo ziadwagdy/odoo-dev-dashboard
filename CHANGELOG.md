@@ -10,6 +10,9 @@ Format: [version] — date
 ### Security
 - **Settings tab no longer exposes secrets.** `GET /api/settings/<project>/odoo-conf` and `/env` returned `admin_passwd`, `db_password` and any `*pass*/*secret*/*token*/*key*` value in clear text to every authenticated user. Values of such keys are now returned as `********`; sending `********` back on save keeps the stored value, so editing other settings never overwrites a secret. Both reads also enforce the project ACL (admin or assigned user). UI renders secret fields as password inputs.
 
+### Changed
+- Onboarding no longer shows the Odoo master password: it is generated 32 characters long and never displayed, because databases are created and restored through the dashboard as the logged-in user.
+
 ---
 
 ## [1.7.10] — 2026-10-15

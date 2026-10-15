@@ -251,7 +251,9 @@ USER odoo
     _log(emit, 'Created Dockerfile')
 
     # admin_passwd
-    admin_passwd = secrets.token_urlsafe(12)
+    # Odoo's own DB manager is not used (the dashboard creates/restores databases as the
+    # logged-in user), so the master password is random, long and never shown to anyone.
+    admin_passwd = secrets.token_urlsafe(32)
 
     # The dashboard connects to every project DB as settings.DB_USER (see
     # db_service._connect), so the project's Postgres + Odoo must use that same
@@ -298,8 +300,7 @@ limit_time_real = 1200
 """)
     _log(emit, 'Created odoo.conf')
 
-    # Emit the password as a structured credential event — UI will show it prominently
-    emit({'type': 'credential', 'label': 'DB Manager master password', 'value': admin_passwd})
+    _log(emit, 'Odoo master password generated (not shown: use the dashboard Database tab to create or restore databases)')
 
     # PostgreSQL version
     pg_version = {'15': '14', '17': '15'}.get(str(version), '16')
