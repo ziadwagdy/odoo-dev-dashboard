@@ -98,7 +98,17 @@ def _ensure_ipykernel(container_name: str, status_callback) -> None:
     status_callback('ipykernel installed successfully')
 
 
+_SAFE = __import__('re').compile(r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$')
+
+
+def _check_name(name: str) -> None:
+    # interpolated into `sh -c` strings below
+    if not _SAFE.match(name or ''):
+        raise ValueError('invalid project name')
+
+
 def _write_connection_file(container_name: str, project_name: str, key: str) -> None:
+    _check_name(project_name)
     conn = {'ip': '0.0.0.0', 'transport': 'tcp',
             'signature_scheme': 'hmac-sha256', 'key': key, **KERNEL_PORTS}
     encoded = base64.b64encode(json.dumps(conn).encode()).decode()
@@ -110,6 +120,7 @@ def _write_connection_file(container_name: str, project_name: str, key: str) -> 
 
 
 def _launch_kernel_in_container(container_name: str, project_name: str) -> None:
+    _check_name(project_name)
     path = f'/tmp/_kernel_{project_name}.json'
     c = get_docker_client().containers.get(container_name)
     c.exec_run(f"sh -c 'pkill -f \"ipykernel_launcher.*{project_name}\" || true'", detach=False)

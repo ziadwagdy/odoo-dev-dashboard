@@ -5,6 +5,17 @@ Format: [version] — date
 
 ---
 
+## [1.7.9] — 2026-10-15
+
+### Security
+- **All `/stream/*` SSE endpoints, `/api/onboard/stream/*` and the notebook WebSocket now require authentication.** They are plain Django/Channels views outside DRF and previously had none: anyone who could reach the dashboard could read container logs and the onboarding credential events, and trigger module updates, git pulls and branch switches by URL. New `services/stream_auth.py`: DRF token from the `Authorization` header or `?token=` query parameter, per-project ACL (`UserProjectAssignment`), role requirements (module update / branch switch / submodule / git pull need admin or manager; onboarding stream and notebook kernel are admin only), registry membership check, and name validation (`SAFE_NAME`) for every value that reaches `docker exec`.
+- **Notebook WebSocket**: closes with 4401 unless the token belongs to an admin, the `Origin` host is in `ALLOWED_HOSTS` and the project exists in the registry; project names are validated before they reach `sh -c` in `kernel_manager`.
+- **GitHub webhook fails closed** when `GITHUB_WEBHOOK_SECRET` is unset (it used to accept everything).
+- **Database names** are validated and used as `psycopg2.sql.Identifier` in `DROP`/`CREATE DATABASE` and in `pg_dump`/`pg_restore` arguments.
+- Frontend: `utils/authedStreams.ts` appends the session token to same-origin EventSource/WebSocket requests; dashboard nginx logs `/stream/` and `/ws/` by path only so tokens never reach the access log.
+
+---
+
 ## [1.7.8] — 2026-10-15
 
 ### Security

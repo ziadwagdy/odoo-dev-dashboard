@@ -3,10 +3,21 @@ import re
 import subprocess
 from datetime import datetime
 import psycopg2
+from psycopg2 import sql
 from django.conf import settings
 
 from .docker_service import exec_in_container_sync
 from .registry import read_registry
+
+
+_DB_NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$')
+
+
+def _check_db_name(name):
+    """Database names reach SQL identifiers, pg_dump/pg_restore args and file names."""
+    if not isinstance(name, str) or not _DB_NAME.match(name):
+        raise ValueError(f'invalid database name: {name!r}')
+    return name
 
 
 def _db_endpoint(db_port):
@@ -59,6 +70,7 @@ def list_databases(db_port):
 
 
 def backup_database(db_port, dbname, backup_dir):
+    _check_db_name(dbname)
     os.makedirs(backup_dir, exist_ok=True)
     ts = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
     filename = f'{dbname}-{ts}.dump'
@@ -76,6 +88,7 @@ def backup_database(db_port, dbname, backup_dir):
 
 
 def restore_database(db_port, dbname, backup_filepath, project_name=None):
+    _check_db_name(dbname)
     """Restore a .dump file into dbname (drops and recreates), then neutralize it."""
     # Drop existing connections and database
     try:
@@ -87,8 +100,9 @@ def restore_database(db_port, dbname, backup_filepath, project_name=None):
             FROM pg_stat_activity
             WHERE datname = %s AND pid <> pg_backend_pid()
         """, (dbname,))
-        cur.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
-        cur.execute(f'CREATE DATABASE "{dbname}" OWNER "{settings.DB_USER}"')
+        cur.execute(sql.SQL('DROP DATABASE IF EXISTS {}').format(sql.Identifier(dbname)))
+        cur.execute(sql.SQL('CREATE DATABASE {} OWNER {}').format(
+            sql.Identifier(dbname), sql.Identifier(settings.DB_USER)))
         conn.close()
     except Exception as e:
         raise RuntimeError(f'Failed to prepare database: {e}')
@@ -140,6 +154,8 @@ def _human_size(b):
 
 
 def duplicate_database(db_port, src, dst, project_name=None):
+    _check_db_name(src)
+    _check_db_name(dst)
     conn = _connect(db_port)
     conn.autocommit = True
     cur = conn.cursor()
@@ -148,7 +164,8 @@ def duplicate_database(db_port, src, dst, project_name=None):
         FROM pg_stat_activity
         WHERE datname = %s AND pid <> pg_backend_pid()
     """, (src,))
-    cur.execute(f'CREATE DATABASE "{dst}" TEMPLATE "{src}"')
+    cur.execute(sql.SQL('CREATE DATABASE {} TEMPLATE {}').format(
+        sql.Identifier(dst), sql.Identifier(src)))
     conn.close()
 
     if project_name:
@@ -156,6 +173,8 @@ def duplicate_database(db_port, src, dst, project_name=None):
 
 
 def neutralize_database(project_name, dbname):
+    _check_db_name(dbname)
+    _check_db_name(project_name)
     """Run Odoo's built-in neutralize command against dbname inside <project>-app.
 
     Disables outgoing mail servers, cron jobs, payment providers, and other
@@ -172,6 +191,7 @@ def neutralize_database(project_name, dbname):
 
 
 def drop_database(db_port, dbname):
+    _check_db_name(dbname)
     conn = _connect(db_port)
     conn.autocommit = True
     cur = conn.cursor()
@@ -180,7 +200,7 @@ def drop_database(db_port, dbname):
         FROM pg_stat_activity
         WHERE datname = %s AND pid <> pg_backend_pid()
     """, (dbname,))
-    cur.execute(f'DROP DATABASE "{dbname}"')
+    cur.execute(sql.SQL('DROP DATABASE {}').format(sql.Identifier(dbname)))
     conn.close()
 
 

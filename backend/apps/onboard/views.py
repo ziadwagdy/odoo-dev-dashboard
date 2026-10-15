@@ -10,6 +10,7 @@ from rest_framework.decorators import api_view, permission_classes
 from core.permissions import IsAdmin, IsAdminOrManager
 
 from services import onboard_service
+from services.stream_auth import sse_auth
 from state import onboard_queues
 from apps.projects.models import AuditLog
 
@@ -198,6 +199,7 @@ def start_onboard(request):
 
 # ── SSE stream ───────────────────────────────────────────────────────
 
+@sse_auth(roles={'admin'})
 async def stream_onboard(request, project_name):
     async def generate():
         q = onboard_queues.get(project_name)

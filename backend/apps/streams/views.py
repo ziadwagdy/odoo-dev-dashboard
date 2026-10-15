@@ -8,6 +8,7 @@ from django.http import StreamingHttpResponse
 
 from asgiref.sync import sync_to_async
 from services.registry import read_registry
+from services.stream_auth import sse_auth
 from apps.projects.models import UserProjectAssignment
 
 
@@ -37,6 +38,7 @@ def _sse_response(async_gen):
     return response
 
 
+@sse_auth()
 async def stream_status(request):
     allowed = await _allowed_names(getattr(request, 'user', None))
 
@@ -58,6 +60,7 @@ async def stream_status(request):
     return _sse_response(generate())
 
 
+@sse_auth(project_arg='name')
 async def stream_deploy(request, name):
     async def generate():
         q = deploy_queues.get(name)
@@ -81,6 +84,7 @@ async def stream_deploy(request, name):
     return _sse_response(generate())
 
 
+@sse_auth(container_arg='name')
 async def stream_logs(request, name):
     tail = int(request.GET.get('tail', 500))
     follow = request.GET.get('follow', 'true').lower() == 'true'
@@ -109,6 +113,7 @@ async def stream_logs(request, name):
     return _sse_response(generate())
 
 
+@sse_auth(container_arg='container_name')
 async def stream_stats(request, container_name):
     async def generate():
         loop = asyncio.get_running_loop()
@@ -159,6 +164,7 @@ async def stream_stats(request, container_name):
     return _sse_response(generate())
 
 
+@sse_auth(project_arg='project', roles={'admin','manager'})
 async def stream_module_update(request, project, dbname, module_name):
     container_name = f'{project}-app'
     cmd = f'odoo -c /tmp/odoo-runtime.conf -d {dbname} -u {module_name} --stop-after-init'
@@ -189,6 +195,7 @@ async def stream_module_update(request, project, dbname, module_name):
     return _sse_response(generate())
 
 
+@sse_auth(project_arg='project', roles={'admin','manager'})
 async def stream_branch_switch(request, project):
     async def generate():
         loop = asyncio.get_running_loop()
@@ -212,6 +219,7 @@ async def stream_branch_switch(request, project):
     return _sse_response(generate())
 
 
+@sse_auth(project_arg='project', roles={'admin','manager'})
 async def stream_submodule_update(request, project):
     async def generate():
         loop = asyncio.get_running_loop()
@@ -235,6 +243,7 @@ async def stream_submodule_update(request, project):
     return _sse_response(generate())
 
 
+@sse_auth(roles={'admin','manager'})
 async def stream_submodule_switch(request, key):
     import urllib.parse
     decoded_key = urllib.parse.unquote(key)
@@ -261,6 +270,7 @@ async def stream_submodule_switch(request, key):
     return _sse_response(generate())
 
 
+@sse_auth(project_arg='project', roles={'admin','manager'})
 async def stream_git_pull(request, project):
     async def generate():
         loop = asyncio.get_running_loop()
@@ -284,6 +294,7 @@ async def stream_git_pull(request, project):
     return _sse_response(generate())
 
 
+@sse_auth()
 async def stream_health_host(request):
     async def generate():
         loop = asyncio.get_running_loop()
@@ -296,6 +307,7 @@ async def stream_health_host(request):
     return _sse_response(generate())
 
 
+@sse_auth()
 async def stream_health_containers(request):
     allowed = await _allowed_names(getattr(request, 'user', None))
 

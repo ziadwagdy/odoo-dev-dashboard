@@ -1,16 +1,40 @@
 import asyncio, json, threading
 from channels.generic.websocket import AsyncWebsocketConsumer
+from urllib.parse import urlparse
+
+from django.conf import settings
+from asgiref.sync import sync_to_async
+from services.registry import read_registry
+from services.stream_auth import SAFE_NAME, token_from_scope, user_from_token, role_names
 from . import kernel_manager
 
 
 class NotebookConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.project = self.scope['url_route']['kwargs']['project']
+        # Runs arbitrary Python inside the project's container: admin only,
+        # authenticated with the DRF token, same-origin only, registry project only.
+        if not SAFE_NAME.match(self.project) or not await self._authorised():
+            await self.close(code=4401)
+            return
         await self.accept()
         await self.send(text_data=json.dumps({
             'type': 'status',
             'data': kernel_manager.get_kernel_status(self.project),
         }))
+
+    async def _authorised(self) -> bool:
+        headers = dict(self.scope.get('headers') or [])
+        origin = headers.get(b'origin', b'').decode('latin-1')
+        if origin:
+            host = urlparse(origin).hostname or ''
+            if host not in settings.ALLOWED_HOSTS:
+                return False
+        user = await user_from_token(token_from_scope(self.scope))
+        if user is None or 'admin' not in await role_names(user):
+            return False
+        names = await sync_to_async(lambda: {p['name'] for p in read_registry()})()
+        return self.project in names
 
     async def receive(self, text_data):
         try:
