@@ -15,7 +15,7 @@ Usage:  python3 pgpass-rollout.py omc-holding            # one project
         python3 pgpass-rollout.py --all                  # every project, stops on first failure
         python3 pgpass-rollout.py --dry-run --all        # show the planned edits only
 """
-import json, os, re, secrets, shutil, subprocess, sys, time, urllib.request
+import json, os, re, secrets, shutil, subprocess, sys, time, urllib.error, urllib.request
 
 BASE = '/home/zeyad/odoo-dev'
 BACKEND = 'odoo-dev-dashboard-backend-1'
@@ -109,9 +109,19 @@ def patch_compose(text, service, app_container):
     return ''.join(lines[:start] + out + lines[end:])
 
 
-def http_code(url):
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *a, **k):
+        return None
+
+
+def http_code(url, timeout=90):
+    """Status code without following redirects (multi-DB stacks redirect /web/login to the
+    selector with a Location that does not carry the published port)."""
+    opener = urllib.request.build_opener(_NoRedirect)
     try:
-        return urllib.request.urlopen(url, timeout=5).status
+        return opener.open(url, timeout=timeout).status
+    except urllib.error.HTTPError as e:
+        return e.code
     except Exception:
         return 0
 
@@ -191,7 +201,7 @@ def do_project(name, dry=False):
         for dbn in names[:1]:
             code = http_code(f'http://127.0.0.1:{port}/web/login?db={dbn}')
             print(f'   login page for {dbn}: {code}')
-            if code != 200:
+            if not (200 <= code < 400):
                 raise RuntimeError('login page failed')
         top = sh('docker', 'exec', app, 'sh', '-c', "tr '\\0' ' ' < /proc/1/cmdline")
         if 'db_password' in top:
