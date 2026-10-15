@@ -177,7 +177,10 @@ def detect_addons(repo_dir):
     return sorted(addons)
 
 
-def build_addons_path(version, hr_base_mode):
+def build_addons_path(version, hr_base_mode, addons=()):
+    """addons: module paths relative to the repo root (from detect_addons).
+    Every directory that directly holds a module becomes an entry, so nested
+    layouts — e.g. a cnc-hr-base submodule ('yes-included') — are covered."""
     parts = [
         '/usr/lib/python3/dist-packages/odoo/addons',
         '/mnt/enterprise-addons',
@@ -185,6 +188,17 @@ def build_addons_path(version, hr_base_mode):
     if hr_base_mode == 'yes-mount':
         parts.append('/mnt/hr-base-addons')
     parts.append('/mnt/project-addons')
+
+    module_dirs = set(addons)
+    container_dirs = set()
+    for addon in addons:
+        parent = Path(addon).parent
+        # Skip modules nested inside another module (e.g. test fixtures)
+        if any(str(p) in module_dirs for p in parent.parents if str(p) != '.') or str(parent) in module_dirs:
+            continue
+        if str(parent) != '.':
+            container_dirs.add(parent.as_posix())
+    parts.extend(f'/mnt/project-addons/{d}' for d in sorted(container_dirs))
     return ','.join(parts)
 
 
@@ -239,6 +253,30 @@ USER odoo
     # admin_passwd
     admin_passwd = secrets.token_urlsafe(12)
 
+    # The dashboard connects to every project DB as settings.DB_USER (see
+    # db_service._connect), so the project's Postgres + Odoo must use that same
+    # role — otherwise the Database/Notebook tabs cannot see or restore DBs.
+    #
+    # SECURITY: that role must NOT be a superuser. A superuser reachable over
+    # the shared odoo-dbnet with a guessable password allows
+    # COPY ... FROM PROGRAM (the 2026-09-02 cryptominer incident). So the
+    # Postgres bootstrap superuser gets a random per-project password that the
+    # app/dashboard never use, and db_user is created as a plain LOGIN+CREATEDB
+    # role by an initdb script.
+    db_user = settings.DB_USER
+    db_password = settings.DB_PASSWORD
+    pg_admin_user = 'odoo'
+    pg_admin_password = secrets.token_urlsafe(24)
+
+    initdb_dir = project_dir / 'initdb'
+    initdb_dir.mkdir(exist_ok=True)
+    (initdb_dir / '01-app-role.sql').write_text(
+        f"CREATE ROLE \"{db_user}\" LOGIN CREATEDB NOSUPERUSER NOCREATEROLE "
+        f"PASSWORD '{db_password.replace(chr(39), chr(39) * 2)}';\n"
+    )
+    # Must stay world-readable: the postgres user inside the container reads it
+    (initdb_dir / '01-app-role.sql').chmod(0o644)
+
     # odoo.conf
     (config_dir / 'odoo.conf').write_text(f"""[options]
 admin_passwd = {admin_passwd}
@@ -247,8 +285,8 @@ data_dir = /var/lib/odoo
 
 db_host = db-{project_name}
 db_port = 5432
-db_user = odoo
-db_password = odoo
+db_user = {db_user}
+db_password = {db_password}
 
 list_db = True
 proxy_mode = True
@@ -286,10 +324,11 @@ limit_time_real = 1200
     restart: unless-stopped
     environment:
       POSTGRES_DB: postgres
-      POSTGRES_USER: odoo
-      POSTGRES_PASSWORD: odoo
+      POSTGRES_USER: {pg_admin_user}
+      POSTGRES_PASSWORD: {pg_admin_password}
     volumes:
       - db-data:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
     ports:
       # Loopback only (host `psql` convenience). The dashboard reaches this DB
       # by container name on the shared `odoo-dbnet` network, not via this port.
@@ -298,7 +337,7 @@ limit_time_real = 1200
       - default
       - odoo-dbnet
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U odoo"]
+      test: ["CMD-SHELL", "pg_isready -U {pg_admin_user}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -316,8 +355,8 @@ limit_time_real = 1200
 {chr(10).join(volume_lines)}
     environment:
       - HOST=db-{project_name}
-      - USER=odoo
-      - PASSWORD=odoo
+      - USER={db_user}
+      - PASSWORD={db_password}
 
 networks:
   default:
@@ -360,6 +399,34 @@ def start_containers(project_name, emit):
     if result.returncode != 0:
         raise Exception(f'docker compose up failed: {result.stderr.strip()}')
     _log(emit, 'Containers started')
+
+
+def verify_db_access(project_name, emit, timeout=90):
+    """Connect to the new project's Postgres exactly as the dashboard does.
+
+    Fails the onboarding loudly if the dashboard role/password can't log in,
+    instead of leaving a project whose DB list is silently empty.
+    """
+    import time
+    import psycopg2
+    host = f'{project_name}-db'
+    deadline = time.time() + timeout
+    last_err = None
+    while time.time() < deadline:
+        try:
+            conn = psycopg2.connect(
+                host=host, port=5432, user=settings.DB_USER,
+                password=settings.DB_PASSWORD, dbname='postgres', connect_timeout=5,
+            )
+            conn.close()
+            _log(emit, f'Dashboard DB access verified ({settings.DB_USER}@{host})')
+            return
+        except Exception as e:
+            last_err = e
+            time.sleep(3)
+    raise Exception(
+        f'Dashboard cannot connect to {host} as {settings.DB_USER}: {last_err}'
+    )
 
 
 def update_dozzle(project_name, emit):

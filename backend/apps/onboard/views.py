@@ -141,7 +141,7 @@ def start_onboard(request):
                 emit({'type': 'log', 'text': f'Found {len(addons)} addon(s): {preview}'})
             else:
                 emit({'type': 'log', 'text': 'No addons detected'})
-            addons_path = onboard_service.build_addons_path(version, hr_base_mode)
+            addons_path = onboard_service.build_addons_path(version, hr_base_mode, addons)
             emit({'type': 'phase_done', 'phase': 'addons'})
 
             # ── config ─────────────────────────────────────────────
@@ -160,6 +160,7 @@ def start_onboard(request):
             # ── start ──────────────────────────────────────────────
             emit({'type': 'phase_start', 'phase': 'start'})
             onboard_service.start_containers(project_name, emit)
+            onboard_service.verify_db_access(project_name, emit)
             emit({'type': 'phase_done', 'phase': 'start'})
 
             # ── register ───────────────────────────────────────────

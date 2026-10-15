@@ -5,6 +5,18 @@ Format: [version] — date
 
 ---
 
+## [1.7.8] — 2026-10-15
+
+### Security
+- **Onboarding no longer creates `odoo`/`odoo` superusers.** `onboard_service.create_docker_stack` now writes a per-project random password for the Postgres bootstrap superuser (`odoo`, never used by the app) and creates the dashboard/app role (`settings.DB_USER`, `odoo_app`) as `LOGIN CREATEDB NOSUPERUSER NOCREATEROLE` through `initdb/01-app-role.sql`. Previously the generated stack used `odoo`/`odoo` while the dashboard connects as `odoo_app`, so new projects showed no databases and were exposed to the same `COPY … FROM PROGRAM` vector as the 2026-09-02 incident.
+- **`verify_db_access()`** runs right after the containers start and fails the onboarding loudly if the dashboard cannot log in to the new project's Postgres.
+- Operational (not code): `odoo_app` removed from the superuser `odoo` role on five stacks, superuser passwords rotated, shared `odoo_app` password rotated everywhere, connection logging enabled on the five stacks that were targeted.
+
+### Changed
+- `build_addons_path` now takes the detected module paths and adds every directory that directly holds modules, so nested layouts (e.g. a `cnc-hr-base` submodule inside a submodule, as in `omc-holding`) are mounted in the generated `addons_path`.
+
+---
+
 ## [1.7.7] — 2026-09-02
 
 ### Changed
