@@ -45,7 +45,10 @@
         <div v-if="r.reason" class="text-xs text-slate-400 mb-1">“{{ r.reason }}”</div>
         <div v-for="w in r.warnings" :key="w" class="text-xs text-amber-400">⚠ {{ w }}</div>
         <div class="flex gap-2 mt-2">
-          <button v-if="canApprove" class="btn btn-primary btn-sm" @click="startApprove(r)">Review &amp; apply…</button>
+          <button v-if="r.can_approve" class="btn btn-primary btn-sm" @click="startApprove(r)">Review &amp; apply…</button>
+          <button v-else-if="canApprove && r.self_request" class="btn btn-ghost btn-sm" title="Another admin should approve this. Use only if you are the sole admin."
+                  @click="startApprove(r, true)">Approve my own request (override)…</button>
+          <span v-if="canApprove && r.self_request" class="text-xs text-slate-500 self-center">needs a second admin</span>
           <button v-if="canApprove" class="btn btn-ghost btn-sm" @click="reject(r)">Reject</button>
           <button v-if="!canApprove || r.requested_by" class="btn btn-ghost btn-sm" @click="cancel(r)">Cancel</button>
         </div>
@@ -92,7 +95,7 @@
         </ul>
         <div v-for="w in modal.warnings" :key="w" class="text-sm text-amber-400 mb-2">⚠ {{ w }}</div>
         <p v-if="modal.restart && !modal.errors.length" class="text-xs text-slate-400 mb-3">Applying restarts this project's Odoo (about a minute of downtime). If it does not become healthy the previous configuration is restored automatically.</p>
-        <textarea v-if="!modal.errors.length || modal.mode === 'apply'" v-model="modal.reason" class="input w-full mb-3 text-sm" rows="2" :placeholder="modal.mode === 'request' ? 'Why is this change needed? (shown to the approver)' : 'Note (optional)'" />
+        <textarea v-if="!modal.errors.length || modal.mode === 'apply'" v-model="modal.reason" class="input w-full mb-3 text-sm" rows="2" :placeholder="modal.selfApprove ? 'Why are you approving your own request? (required, audited)' : (modal.mode === 'request' ? 'Why is this change needed? (shown to the approver)' : 'Note (optional)')" />
         <label v-if="modal.mode === 'apply' && modal.warnings.length" class="flex items-center gap-2 text-sm text-slate-300 mb-3">
           <input type="checkbox" v-model="modal.ack" class="accent-indigo-500" /> I have read the warnings and want to apply anyway
         </label>
@@ -115,7 +118,7 @@ import { ref, computed, watch } from 'vue'
 import { useNotificationsStore } from '@/stores/notifications'
 
 interface Field { key: string; label: string; type: string; group: string; help: string; min: number | null; max: number | null; choices: string[] | null; default: number | string; value: number | string; source: string; restart: boolean }
-interface Req { id: number; status: string; requested_by: string; requested_at: string; changes: Record<string, any>; previous: Record<string, any>; warnings: string[]; reason: string; decided_by: string; result: string }
+interface Req { self_request?: boolean; can_approve?: boolean; id: number; status: string; requested_by: string; requested_at: string; changes: Record<string, any>; previous: Record<string, any>; warnings: string[]; reason: string; decided_by: string; result: string }
 
 const props = defineProps<{ projectName: string; active: boolean }>()
 const notify = useNotificationsStore()
@@ -164,7 +167,7 @@ function changedOnly() {
   return out
 }
 
-const modal = ref<null | { title: string; diff: { key: string; label: string; from: any; to: any }[]; errors: string[]; warnings: string[]; restart: boolean; mode: 'request' | 'apply'; reqId?: number; reason: string; ack: boolean; restartNow: boolean; busy: boolean }>(null)
+const modal = ref<null | { selfApprove?: boolean; title: string; diff: { key: string; label: string; from: any; to: any }[]; errors: string[]; warnings: string[]; restart: boolean; mode: 'request' | 'apply'; reqId?: number; reason: string; ack: boolean; restartNow: boolean; busy: boolean }>(null)
 
 async function review() {
   busy.value = true
@@ -186,8 +189,8 @@ async function submitRequest() {
   else m.errors = d.errors || ['Failed']
 }
 
-function startApprove(r: Req) {
-  modal.value = { title: `Apply request #${r.id}`, diff: Object.entries(r.changes).map(([k, v]) => ({ key: k, label: labelOf(k), from: r.previous[k], to: v })),
+function startApprove(r: Req, selfApprove = false) {
+  modal.value = { selfApprove, title: selfApprove ? `Approve your own request #${r.id} (override)` : `Apply request #${r.id}`, diff: Object.entries(r.changes).map(([k, v]) => ({ key: k, label: labelOf(k), from: r.previous[k], to: v })),
     errors: [], warnings: r.warnings, restart: true, mode: 'apply', reqId: r.id, reason: '', ack: false, restartNow: true, busy: false }
 }
 
@@ -196,7 +199,7 @@ async function approve() {
   m.busy = true
   const res = await api(`/api/settings/${props.projectName}/changes/${m.reqId}/approve`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ confirm: true, accept_warnings: m.ack, restart: m.restartNow, note: m.reason }) })
+    body: JSON.stringify({ confirm: true, accept_warnings: m.ack, restart: m.restartNow, note: m.reason, self_approve: !!m.selfApprove }) })
   const d = await res.json()
   m.busy = false
   if (d.ok) { notify.add('success', d.restarted ? 'Applied and restarted' : 'Applied (restart pending)'); modal.value = null; await loadRuntime() }

@@ -5,6 +5,21 @@ Format: [version] — date
 
 ---
 
+## [1.8.0] — 2026-10-15
+
+Phase 1 of `docs/ROADMAP.md` (access control and accountability), built test-first.
+
+### Security
+- **"Open as" is role-gated** (`services/access_policy.py`, exhaustively unit tested): developers may open ordinary users of *neutralized* databases only; managers may open ordinary users anywhere and administrators of neutralized databases; admins may open anything; any other role is refused. A reason (≥ 8 characters) is required wherever the database is not neutralized or a manager targets an administrator. The picker greys out what the caller's role may not do, says why, and shows the neutralization state.
+- **Four-eyes on settings changes:** the requester cannot approve their own request. A sole admin may use an explicit *self-approve* override with a written reason, which is audited as `config_self_approve`.
+- **Richer audit trail:** `AuditLog` now carries `ip` and structured `meta` (database, target user, target-is-admin, neutralized, reason, link lifetime). Denied attempts are recorded as `denied`.
+- Freshly created databases are neutralized so they count as safe development copies.
+
+### Tests
+- 146 backend tests (was 109), 8 frontend tests, 76-check live smoke, addon contract test.
+
+---
+
 ## [1.7.15] — 2026-10-15
 
 ### Added (development process, no runtime change)

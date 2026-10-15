@@ -46,6 +46,8 @@ class AuditLog(models.Model):
     detail       = models.TextField(blank=True)
     outcome      = models.CharField(max_length=20, default='success')
     user         = models.CharField(max_length=150, blank=True, default='')
+    ip           = models.CharField(max_length=64, blank=True, default='')
+    meta         = models.JSONField(default=dict, blank=True)   # structured who/what/why
     triggered_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

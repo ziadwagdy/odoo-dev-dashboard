@@ -22,6 +22,8 @@ from services.db_service import (list_databases, backup_database, duplicate_data
                                   list_modules_grouped, list_backup_files, restore_database, neutralize_database,
                                   set_odoo_user_password, create_odoo_database)
 from services import sso as sso_service
+from services.access_policy import can_open_as
+from core.net import client_ip
 from state import deploy_queues, get_deploy_lock
 from .models import DeployHistory, BackupSchedule, AuditLog, UserProjectAssignment
 from .serializers import DeployHistorySerializer, BackupScheduleSerializer, AuditLogSerializer
@@ -44,9 +46,10 @@ def _filter_projects(user, projects):
     return [p for p in projects if p['name'] in allowed]
 
 
-def _audit(project, action, detail='', outcome='success', user=''):
+def _audit(project, action, detail='', outcome='success', user='', ip='', meta=None):
     try:
-        AuditLog.objects.create(project=project, action=action, detail=detail, outcome=outcome, user=user)
+        AuditLog.objects.create(project=project, action=action, detail=detail, outcome=outcome,
+                                user=user, ip=ip, meta=meta or {})
     except Exception:
         pass
 
@@ -588,40 +591,79 @@ def db_admin_password(request, project, dbname):
     return _no_store(Response({'ok': True, 'login': login_name, 'password': password}))
 
 
+def _role(user):
+    for name in ('admin', 'manager', 'developer'):
+        if user.groups.filter(name=name).exists():
+            return name
+    return None
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def db_login_users(request, project, dbname):
-    """Users of an Odoo database that the logged-in dashboard user may sign in as."""
+    """Users of an Odoo database, annotated with what the caller's role may do with each."""
     if not _can_access_project(request.user, project):
         return Response({'error': 'Access denied'}, status=403)
     p = get_project(project)
     if not p:
         return Response({'error': 'project not found'}, status=404)
     try:
-        return Response({'users': sso_service.list_login_candidates(p['db_port'], dbname)})
+        users = sso_service.list_login_candidates(p['db_port'], dbname)
+        neutralized = sso_service.database_state(p['db_port'], dbname)['neutralized']
     except ValueError as e:
         return Response({'error': str(e)}, status=400)
     except Exception as e:
         return Response({'error': str(e)}, status=500)
+    role = _role(request.user)
+    annotated = []
+    for u in users:
+        d = can_open_as(role, target_is_admin=u['admin'], db_neutralized=neutralized)
+        annotated.append({**u, 'allowed': d.allowed, 'reason_required': d.reason_required, 'why': d.message})
+    return Response({'users': annotated, 'neutralized': neutralized, 'role': role})
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def db_login_link(request, project, dbname):
-    """Return a 60-second, one-time link that signs the dashboard user into the
-    chosen Odoo database as the chosen user. No password is created or shared."""
+    """Return a 60-second, one-time link that signs the dashboard user into the chosen Odoo
+    database as the chosen user. Role-gated, reason required where policy says so, audited."""
     if not _can_access_project(request.user, project):
         return Response({'error': 'Access denied'}, status=403)
     p = get_project(project)
     if not p:
         return Response({'error': 'project not found'}, status=404)
     login_name = str(request.data.get('login', 'admin')).strip() or 'admin'
+    reason = str(request.data.get('reason', '')).strip()
+    ip = client_ip(request)
+    try:
+        users = {u['login']: u for u in sso_service.list_login_candidates(p['db_port'], dbname)}
+        neutralized = sso_service.database_state(p['db_port'], dbname)['neutralized']
+    except ValueError as e:
+        return Response({'ok': False, 'error': str(e)}, status=400)
+    except Exception as e:
+        return Response({'ok': False, 'error': str(e)}, status=500)
+    target = users.get(login_name)
+    if target is None:
+        return Response({'ok': False, 'error': f'no active internal user {login_name!r} in {dbname}'}, status=400)
+
+    decision = can_open_as(_role(request.user), target_is_admin=target['admin'],
+                           db_neutralized=neutralized, reason=reason)
+    meta = {'db': dbname, 'target': login_name, 'target_is_admin': target['admin'],
+            'neutralized': neutralized, 'reason': reason, 'expires_in': sso_service.LINK_TTL}
+    if not decision.allowed:
+        _audit(project, 'db_login_link', f'{dbname} as {login_name}', outcome='denied',
+               user=request.user.username, ip=ip, meta=meta)
+        return Response({'ok': False, 'error': decision.message or 'Not allowed'}, status=403)
+    if not decision.satisfied:
+        return Response({'ok': False, 'reason_required': True,
+                         'error': 'A reason is required for this sign-in (at least 8 characters).'}, status=400)
     try:
         url = sso_service.build_login_url(p, p['db_port'], dbname, login_name)
     except (ValueError, LookupError) as e:
         return Response({'ok': False, 'error': str(e)}, status=400)
     except Exception as e:
-        _audit(project, 'db_login_link', f'{dbname} as {login_name}', outcome='failed', user=request.user.username)
+        _audit(project, 'db_login_link', f'{dbname} as {login_name}', outcome='failed',
+               user=request.user.username, ip=ip, meta=meta)
         return Response({'ok': False, 'error': str(e)}, status=500)
-    _audit(project, 'db_login_link', f'{dbname} as {login_name}', user=request.user.username)
+    _audit(project, 'db_login_link', f'{dbname} as {login_name}', user=request.user.username, ip=ip, meta=meta)
     return _no_store(Response({'ok': True, 'url': url, 'expires_in': sso_service.LINK_TTL}))

@@ -413,6 +413,9 @@ def create_odoo_database(project_name, db_port, dbname, demo=False):
     if exit_code != 0:
         tail = (output.decode(errors='replace') if isinstance(output, bytes) else str(output))[-600:]
         raise RuntimeError(f'odoo initialisation failed: {tail}')
+    # A brand-new database holds no live data or integrations; neutralizing it records that
+    # fact (database.is_neutralized) so the access policy treats it like any dev copy.
+    neutralize_database(project_name, dbname)
     return 'admin', set_odoo_user_password(project_name, db_port, dbname, 'admin')
 
 

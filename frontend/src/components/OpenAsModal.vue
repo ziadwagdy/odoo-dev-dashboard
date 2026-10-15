@@ -14,31 +14,51 @@
           <select v-model="db" class="input w-full mb-3" @change="loadUsers">
             <option v-for="d in dbs" :key="d" :value="d">{{ d }}</option>
           </select>
+          <div v-if="!loadingUsers" class="text-xs mb-3">
+            <span v-if="neutralized" class="text-emerald-400">● neutralized — no outgoing mail, crons or payments</span>
+            <span v-else class="text-amber-400">● NOT neutralized — may hold live data and integrations</span>
+          </div>
           <label class="text-xs text-slate-500">Sign in as</label>
           <div v-if="loadingUsers" class="text-sm text-slate-500 mb-4">Loading users…</div>
-          <select v-else v-model="login" class="input w-full mb-4">
-            <option v-for="u in users" :key="u.login" :value="u.login">{{ u.name }} ({{ u.login }}){{ u.admin ? ' — admin' : '' }}</option>
+          <select v-else v-model="login" class="input w-full mb-2">
+            <option v-for="u in users" :key="u.login" :value="u.login" :disabled="!u.allowed">
+              {{ u.name }} ({{ u.login }}){{ u.admin ? ' — admin' : '' }}{{ u.allowed ? '' : ' — not allowed for your role' }}
+            </option>
           </select>
+          <p v-if="selected && !selected.allowed" class="text-xs text-red-400 mb-3">{{ selected.why }}</p>
+          <div v-if="selected && selected.allowed && selected.reason_required" class="mb-3">
+            <label class="text-xs text-slate-500">Reason (recorded in the audit log)</label>
+            <textarea v-model="reason" rows="2" class="input w-full text-sm" placeholder="e.g. verify access rights for ticket #4521" />
+          </div>
         </template>
       </template>
       <p v-if="error" class="text-sm text-red-400 mb-3">{{ error }}</p>
       <div class="flex gap-2 justify-end">
         <button class="btn btn-ghost" @click="$emit('close')">Cancel</button>
-        <button class="btn btn-primary" :disabled="busy || loadingUsers || !db || !login" @click="open">Open</button>
+        <button class="btn btn-primary" :disabled="busy || loadingUsers || !db || !login || !canOpen" @click="open">Open</button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { api } from '@/api'
 
 const props = defineProps<{ projectName: string; presetDb?: string }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
 
 const dbs = ref<string[]>([])
-const users = ref<{ login: string; name: string; admin: boolean }[]>([])
+interface LoginUser { login: string; name: string; admin: boolean; allowed: boolean; reason_required: boolean; why: string }
+const users = ref<LoginUser[]>([])
+const neutralized = ref(true)
+const reason = ref('')
+const selected = computed(() => users.value.find(u => u.login === login.value))
+const canOpen = computed(() => {
+  const u = selected.value
+  if (!u || !u.allowed) return false
+  return !u.reason_required || reason.value.trim().length >= 8
+})
 const db = ref('')
 const login = ref('')
 const loadingDbs = ref(true)
@@ -65,7 +85,9 @@ async function loadUsers() {
     if (!res.ok) { error.value = data.error || 'Could not load users' }
     else {
       users.value = data.users
-      login.value = (data.users.find((u: any) => u.login === 'admin') || data.users[0] || {}).login || ''
+      neutralized.value = !!data.neutralized
+      const allowed = (data.users as LoginUser[]).filter(u => u.allowed)
+      login.value = (allowed.find(u => u.login === 'admin') || allowed[0] || data.users[0] || {}).login || ''
     }
   } catch (e: any) { error.value = String(e) }
   loadingUsers.value = false
@@ -77,7 +99,7 @@ async function open() {
   busy.value = true; error.value = ''
   try {
     const res = await api(`/api/db/${props.projectName}/login-link/${db.value}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ login: login.value }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ login: login.value, reason: reason.value.trim() }),
     })
     const data = await res.json()
     if (data.ok && win) { win.location.href = data.url; emit('close') }

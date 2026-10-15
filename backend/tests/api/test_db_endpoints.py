@@ -13,7 +13,8 @@ def fakes(monkeypatch):
     monkeypatch.setattr('apps.projects.views.set_odoo_user_password',
                         lambda proj, port, db, login='admin': calls.setdefault('pw', (proj, db, login)) and 'pw-2')
     monkeypatch.setattr('apps.projects.views.sso_service.list_login_candidates',
-                        lambda port, db: [{'login': 'admin', 'name': 'Admin', 'admin': True}])
+                        lambda port, db: [{'login': 'admin', 'name': 'Admin', 'admin': True}, {'login': 'sara', 'name': 'Sara', 'admin': False}])
+    monkeypatch.setattr('apps.projects.views.sso_service.database_state', lambda port, db: {'neutralized': True})
     monkeypatch.setattr('apps.projects.views.sso_service.build_login_url',
                         lambda p, port, db, login, **kw: calls.setdefault('url', (p['name'], db, login)) and 'https://x/dashboard/login?t=1')
     return calls
@@ -55,12 +56,12 @@ def test_admin_password_is_manager_or_admin_only(actors, fakes):
 
 
 def test_login_link_is_audited_and_acl_checked(actors, fakes):
-    assert _post(actors['stranger'], '/api/db/alpha/login-link/db1', {'login': 'admin'}).status_code == 403
-    r = _post(actors['dev'], '/api/db/alpha/login-link/db1', {'login': 'admin'})
+    assert _post(actors['stranger'], '/api/db/alpha/login-link/db1', {'login': 'sara'}).status_code == 403
+    r = _post(actors['dev'], '/api/db/alpha/login-link/db1', {'login': 'sara'})
     assert r.status_code == 200 and r.json()['ok'] and r['Cache-Control'] == 'no-store'
-    assert fakes['url'] == ('alpha', 'db1', 'admin')
+    assert fakes['url'] == ('alpha', 'db1', 'sara')
     entry = AuditLog.objects.get(action='db_login_link')
-    assert entry.user == 'dev' and 'db1 as admin' in entry.detail
+    assert entry.user == 'dev' and 'db1 as sara' in entry.detail
 
 
 def test_login_users_requires_project_access(actors, fakes):

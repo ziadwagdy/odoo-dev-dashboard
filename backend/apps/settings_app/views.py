@@ -9,6 +9,7 @@ import time
 from django.utils import timezone
 
 from services import settings_schema
+from core.net import client_ip
 from services.docker_service import restart_container, exec_in_container_sync
 from services.cron_scheduler import reschedule_job
 from apps.projects.models import CronJob, AuditLog, UserProjectAssignment, ConfigChangeRequest
@@ -21,9 +22,9 @@ def _can_access(user, project):
     return UserProjectAssignment.objects.filter(user=user, project_name=project).exists()
 
 
-def _audit(project, action, detail='', outcome='success', user=''):
+def _audit(project, action, detail='', outcome='success', user='', ip=''):
     try:
-        AuditLog.objects.create(project=project, action=action, detail=detail, outcome=outcome, user=user)
+        AuditLog.objects.create(project=project, action=action, detail=detail, outcome=outcome, user=user, ip=ip)
     except Exception:
         pass
 
@@ -60,7 +61,14 @@ def runtime_settings(request, project):
     if err:
         return err
     data = settings_schema.describe(p)
-    data['pending'] = [_serialize(r) for r in ConfigChangeRequest.objects.filter(project=project, status='pending')]
+    is_admin = request.user.groups.filter(name='admin').exists()
+    pending = []
+    for r in ConfigChangeRequest.objects.filter(project=project, status='pending'):
+        item = _serialize(r)
+        item['self_request'] = r.requested_by == request.user.username
+        item['can_approve'] = is_admin and not item['self_request']
+        pending.append(item)
+    data['pending'] = pending
     data['history'] = [_serialize(r) for r in ConfigChangeRequest.objects.filter(project=project).exclude(status='pending')[:15]]
     data['can_approve'] = request.user.groups.filter(name='admin').exists()
     return Response(data)
@@ -154,6 +162,20 @@ def change_approve(request, project, request_id):
     if request.data.get('confirm') is not True:
         return Response({'ok': False, 'errors': ['Explicit confirmation required (confirm: true).']}, status=400)
 
+    # four-eyes: the person who asked for a change does not approve it themselves
+    self_approved = False
+    if r.requested_by == request.user.username:
+        if request.data.get('self_approve') is not True:
+            return Response({'ok': False, 'errors': [
+                'You cannot approve your own request; ask another admin. '
+                '(If you are the only admin, resubmit with self_approve and a reason.)']}, status=403)
+        if len(str(request.data.get('note', '')).strip()) < 8:
+            return Response({'ok': False, 'errors': ['Self-approval requires a reason (note, at least 8 characters).']},
+                            status=400)
+        self_approved = True
+        _audit(project, 'config_self_approve', f'#{r.id}: {request.data.get("note")}',
+               user=request.user.username)
+
     cur = settings_schema.current_values(p)
     drifted = [k for k, v in r.previous.items() if cur[k]['value'] != v]
     if drifted:
@@ -181,8 +203,9 @@ def change_approve(request, project, request_id):
         r.status, r.applied_at = 'applied', timezone.now()
         r.result = 'applied' + (' and restarted' if restarted else ' (restart pending)')
         r.save()
-        _audit(project, 'config_apply', f'#{r.id}: ' + ', '.join(f'{k}={v}' for k, v in clean.items()),
-               user=request.user.username)
+        _audit(project, 'config_apply',
+               f'#{r.id}: ' + ', '.join(f'{k}={v}' for k, v in clean.items()) + (' [self-approved]' if self_approved else ''),
+               user=request.user.username, ip=client_ip(request))
         return Response({'ok': True, 'restarted': restarted, 'request': _serialize(r)})
     except Exception as e:
         try:

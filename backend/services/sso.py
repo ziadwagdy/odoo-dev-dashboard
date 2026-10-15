@@ -64,6 +64,19 @@ def list_login_candidates(db_port, db):
         conn.close()
 
 
+def database_state(db_port, db):
+    """Is this database neutralized? (Odoo sets database.is_neutralized when neutralized.)"""
+    _check_db_name(db)
+    conn = _connect(db_port, db)
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT value FROM ir_config_parameter WHERE key = 'database.is_neutralized'")
+        row = cur.fetchone()
+        return {'neutralized': bool(row) and str(row[0]).lower() in ('true', '1')}
+    finally:
+        conn.close()
+
+
 def _addon_state(db_port, db):
     conn = _connect(db_port, db)
     try:
