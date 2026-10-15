@@ -33,6 +33,7 @@ def setup_cron_jobs():
         for name in registered - existing:
             CronJob.objects.create(project=name, schedule=DEFAULT_SCHEDULE, enabled=True)
         # Schedule all enabled deploy jobs
+        setup_restore_test_job()
         scheduler = get_scheduler()
         for job in CronJob.objects.filter(enabled=True):
             _add_job(scheduler, job)
@@ -212,3 +213,34 @@ def _run_scheduled_backup(project_name: str, dbname: str):
         )
     except Exception:
         pass
+
+
+# ── weekly restore test of every project's latest backup ───────────────────
+def run_weekly_restore_tests():
+    """Sunday night: prove that the latest backup of every project really restores."""
+    import os
+    from django.conf import settings
+    from apps.projects.models import AuditLog
+    from services import lifecycle
+    from services.registry import read_registry
+
+    def record(project, outcome):
+        AuditLog.objects.create(
+            project=project, action='restore_test', user='scheduler',
+            outcome='success' if outcome['ok'] else 'failed',
+            detail='scheduled', meta={k: outcome.get(k) for k in ('checks', 'seconds', 'error')})
+
+    results = lifecycle.run_restore_tests(
+        read_registry(), os.path.join(settings.DATA_DIR, 'backups'), record)
+    for r in results:
+        if r['status'] == 'no-backup':
+            AuditLog.objects.create(project=r['project'], action='restore_test', user='scheduler',
+                                    outcome='failed', detail='no backup exists yet', meta={})
+    return results
+
+
+def setup_restore_test_job():
+    scheduler = get_scheduler()
+    if not scheduler.get_job('restore-tests'):
+        scheduler.add_job(run_weekly_restore_tests, CronTrigger(day_of_week='sun', hour=3, minute=30),
+                          id='restore-tests', replace_existing=True, max_instances=1, coalesce=True)

@@ -22,6 +22,8 @@ from services.db_service import (list_databases, backup_database, duplicate_data
                                   list_modules_grouped, list_backup_files, restore_database, neutralize_database,
                                   set_odoo_user_password, create_odoo_database)
 from services import sso as sso_service
+from services import lifecycle
+from services.db_service import database_state
 from services.access_policy import can_open_as
 from core.net import client_ip
 from state import deploy_queues, get_deploy_lock
@@ -159,6 +161,11 @@ def db_list(request, project):
     result = list_databases(p['db_port'])
     if isinstance(result, dict) and 'error' in result:
         return Response(result, status=500)
+    for d in result:
+        try:
+            d['neutralized'] = database_state(p['db_port'], d['name'])['neutralized']
+        except Exception:
+            d['neutralized'] = None        # unknown (not an Odoo database, or unreadable)
     return Response({'databases': result})
 
 
@@ -667,3 +674,27 @@ def db_login_link(request, project, dbname):
         return Response({'ok': False, 'error': str(e)}, status=500)
     _audit(project, 'db_login_link', f'{dbname} as {login_name}', user=request.user.username, ip=ip, meta=meta)
     return _no_store(Response({'ok': True, 'url': url, 'expires_in': sso_service.LINK_TTL}))
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def db_restore_test(request, project):
+    """Restore the latest backup into a scratch database, sanity-check it, drop it.
+    Proves the backups are usable. Manager/admin only; audited."""
+    if not _can_access_project(request.user, project):
+        return Response({'error': 'Access denied'}, status=403)
+    if not _is_admin_or_manager(request.user):
+        return Response({'error': 'Manager or admin privileges required.'}, status=403)
+    p = get_project(project)
+    if not p:
+        return Response({'error': 'project not found'}, status=404)
+    directory = os.path.join(settings.DATA_DIR, 'backups', project)
+    path = lifecycle.latest_backup(directory)
+    if not path:
+        return Response({'error': 'no backup to test yet; create one first'}, status=404)
+    result = lifecycle.restore_check(project, p['db_port'], path, directory)
+    _audit(project, 'restore_test', os.path.basename(path), outcome='success' if result['ok'] else 'failed',
+           user=request.user.username, ip=client_ip(request),
+           meta={'backup': os.path.basename(path), **{k: result[k] for k in ('checks', 'seconds', 'error')}})
+    return Response({'ok': result['ok'], 'backup': os.path.basename(path), 'checks': result['checks'],
+                     'seconds': result['seconds'], 'error': result['error']})

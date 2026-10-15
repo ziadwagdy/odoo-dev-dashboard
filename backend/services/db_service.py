@@ -113,9 +113,34 @@ def backup_database(db_port, dbname, backup_dir):
     return filepath, filename
 
 
-def restore_database(db_port, dbname, backup_filepath, project_name=None):
+def database_state(db_port, dbname):
+    """Is this database neutralized? Odoo records database.is_neutralized when it is."""
     _check_db_name(dbname)
+    conn = _connect(db_port, dbname)
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT value FROM ir_config_parameter WHERE key = 'database.is_neutralized'")
+        row = cur.fetchone()
+        return {'neutralized': bool(row) and str(row[0]).lower() in ('true', '1')}
+    finally:
+        conn.close()
+
+
+def lock_down_database(db_port, dbname):
+    """Only the owning role (and superusers) may connect: no PUBLIC access to a developer copy."""
+    _check_db_name(dbname)
+    conn = _connect(db_port)
+    try:
+        conn.autocommit = True
+        cur = conn.cursor()
+        cur.execute(sql.SQL('REVOKE CONNECT ON DATABASE {} FROM PUBLIC').format(sql.Identifier(dbname)))
+    finally:
+        conn.close()
+
+
+def restore_database(db_port, dbname, backup_filepath, project_name=None):
     """Restore a .dump file into dbname (drops and recreates), then neutralize it."""
+    _check_db_name(dbname)
     # Drop existing connections and database
     try:
         conn = _connect(db_port)
@@ -146,7 +171,8 @@ def restore_database(db_port, dbname, backup_filepath, project_name=None):
             raise RuntimeError(result.stderr)
 
     if project_name:
-        neutralize_database(project_name, dbname)
+        neutralize_database(project_name, dbname, db_port=db_port)
+    lock_down_database(db_port, dbname)
 
 
 def list_backup_files(project, backup_dir):
@@ -195,10 +221,11 @@ def duplicate_database(db_port, src, dst, project_name=None):
     conn.close()
 
     if project_name:
-        neutralize_database(project_name, dst)
+        neutralize_database(project_name, dst, db_port=db_port)
+    lock_down_database(db_port, dst)
 
 
-def neutralize_database(project_name, dbname):
+def neutralize_database(project_name, dbname, db_port=None):
     _check_db_name(dbname)
     _check_db_name(project_name)
     """Run Odoo's built-in neutralize command against dbname inside <project>-app.
@@ -214,6 +241,9 @@ def neutralize_database(project_name, dbname):
     if exit_code != 0:
         detail = output.decode(errors='replace') if isinstance(output, bytes) else output
         raise RuntimeError(f'Neutralize failed: {detail}')
+    if db_port is not None and not database_state(db_port, dbname)['neutralized']:
+        # the command exited 0 but Odoo did not record the flag: do not hand the database out
+        raise RuntimeError(f'{dbname} is not neutralized: Odoo did not record database.is_neutralized')
 
 
 def drop_database(db_port, dbname):
@@ -415,7 +445,8 @@ def create_odoo_database(project_name, db_port, dbname, demo=False):
         raise RuntimeError(f'odoo initialisation failed: {tail}')
     # A brand-new database holds no live data or integrations; neutralizing it records that
     # fact (database.is_neutralized) so the access policy treats it like any dev copy.
-    neutralize_database(project_name, dbname)
+    neutralize_database(project_name, dbname, db_port=db_port)
+    lock_down_database(db_port, dbname)
     return 'admin', set_odoo_user_password(project_name, db_port, dbname, 'admin')
 
 

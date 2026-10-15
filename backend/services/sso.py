@@ -16,7 +16,7 @@ from urllib.parse import urlencode
 
 from django.conf import settings
 
-from .db_service import _connect, _check_db_name, exec_in_container_sync
+from .db_service import _connect, _check_db_name, exec_in_container_sync, database_state  # noqa: F401
 
 LINK_TTL = 60  # seconds
 _LOGIN = re.compile(r'^[A-Za-z0-9_.@+\-]{1,128}$')
@@ -60,19 +60,6 @@ def list_login_candidates(db_port, db):
             WHERE u.active AND COALESCE(u.share, false) = false
             ORDER BY is_admin DESC, u.login LIMIT 300""")
         return [{'login': r[0], 'name': r[1], 'admin': bool(r[2])} for r in cur.fetchall()]
-    finally:
-        conn.close()
-
-
-def database_state(db_port, db):
-    """Is this database neutralized? (Odoo sets database.is_neutralized when neutralized.)"""
-    _check_db_name(db)
-    conn = _connect(db_port, db)
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT value FROM ir_config_parameter WHERE key = 'database.is_neutralized'")
-        row = cur.fetchone()
-        return {'neutralized': bool(row) and str(row[0]).lower() in ('true', '1')}
     finally:
         conn.close()
 

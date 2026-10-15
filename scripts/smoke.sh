@@ -40,6 +40,17 @@ if [ ! -r "$REG" ]; then bad "registry not readable"; else
   done < "$REG"
 fi
 
+echo "== database lifecycle safety"
+admin_of() { for u in odoo pgroot; do
+  [ "$(docker exec "$1" psql -U $u -d postgres -tAc "select rolsuper from pg_roles where rolname=current_user" 2>/dev/null)" = t ] && { echo $u; return; }; done; }
+for c in $(docker ps --format '{{.Names}}' | grep -E -- '-db$'); do
+  u=$(admin_of "$c"); [ -z "$u" ] && { bad "$c: no superuser reachable for the lifecycle check"; continue; }
+  scratch=$(docker exec "$c" psql -U "$u" -d postgres -tAc "select count(*) from pg_database where datname like 'zz-restore-test-%'" 2>/dev/null)
+  [ "$scratch" = "0" ] && ok "$c: no leftover restore-test databases" || bad "$c: $scratch leftover restore-test database(s)"
+  open=$(docker exec "$c" psql -U "$u" -d postgres -tAc "select count(*) from pg_database where datname not in ('postgres','template0','template1') and (datacl is null or datacl::text ~ '(^\\{|,)=[A-Za-z]*c')" 2>/dev/null)
+  [ "$open" = "0" ] && ok "$c: PUBLIC cannot connect to project databases" || bad "$c: $open database(s) connectable by PUBLIC"
+done
+
 echo "== edge"
 listen=$(ss -ltn 2>/dev/null | awk '$4 ~ /:80$/ {print $4}' | sort -u | tr '\n' ' ')
 [[ "$listen" == "127.0.0.1:80 " ]] && ok "nginx listens on loopback only ($listen)" || bad "nginx listeners: ${listen:-none}"

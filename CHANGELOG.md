@@ -5,6 +5,24 @@ Format: [version] — date
 
 ---
 
+## [1.9.0] — 2026-10-15
+
+Phase 2 of `docs/ROADMAP.md` (database lifecycle safety), built test-first.
+
+### Added
+- **Neutralization is verified, not assumed.** After `odoo neutralize` the dashboard reads `database.is_neutralized` and fails the restore/duplicate if Odoo did not record it. The Database tab shows a *neutralized* / *not neutralized* badge per database.
+- **Locked-down databases:** new, restored and duplicated databases get `REVOKE CONNECT … FROM PUBLIC` (idempotent; applied once to all 19 existing databases).
+- **Safety snapshot before module updates** (`services/lifecycle.py`): a dump is taken first (databases up to 500 MB, newest 3 kept per database) and the update aborts if the snapshot fails. Streams through the existing module-update SSE endpoint.
+- **Restore tests:** *Test latest backup* (manager/admin) restores the newest backup into a scratch database, checks users/modules and always drops the scratch DB; a weekly scheduled run (Sunday 03:30) does this for every project. Results are audit-logged.
+
+### Fixed
+- Module update ran `odoo -c /tmp/odoo-runtime.conf`, a file that does not exist in the containers; it now runs a proper argument list against `/etc/odoo/odoo.conf` (no shell string).
+
+### Tests
+- 183 backend tests, 8 frontend tests, smoke extended (leftover scratch databases, PUBLIC connect).
+
+---
+
 ## [1.8.0] — 2026-10-15
 
 Phase 1 of `docs/ROADMAP.md` (access control and accountability), built test-first.

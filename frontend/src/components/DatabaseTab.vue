@@ -8,6 +8,10 @@
         <button class="btn btn-primary btn-sm w-full sm:w-auto inline-flex items-center gap-1.5" @click="createDb">
           + New database
         </button>
+        <button v-if="auth.isAdmin || auth.isManager" class="btn btn-ghost btn-sm w-full sm:w-auto" :disabled="restoreTesting"
+                title="Restore the latest backup into a scratch database, check it, and drop it" @click="restoreTest">
+          {{ restoreTesting ? 'Testing backup…' : 'Test latest backup' }}
+        </button>
         <button class="btn btn-ghost btn-sm w-full sm:w-auto inline-flex items-center gap-1.5" @click="loadDbs">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
           Refresh
@@ -20,7 +24,7 @@
         <!-- Mobile: vertical card layout -->
         <div class="space-y-3 sm:hidden">
           <div v-for="db in dbs" :key="db.name" class="border border-border/50 rounded-xl p-3 bg-surface/30">
-            <div class="font-mono text-sm font-medium text-white mb-1 break-all">{{ db.name }}</div>
+            <div class="font-mono text-sm font-medium text-white mb-1 break-all">{{ db.name }}<span v-if="db.neutralized === true" class="ml-2 text-[10px] uppercase tracking-wide text-emerald-400 border border-emerald-700/50 rounded px-1.5 py-0.5" title="No outgoing mail, crons or payments">neutralized</span><span v-else-if="db.neutralized === false" class="ml-2 text-[10px] uppercase tracking-wide text-amber-400 border border-amber-700/50 rounded px-1.5 py-0.5" title="May hold live data and integrations">not neutralized</span></div>
             <div class="text-slate-400 text-xs mb-2">{{ db.size }}</div>
             <div class="flex gap-2">
               <button class="btn btn-ghost btn-sm p-2 min-h-[44px] min-w-[44px]" @click="backup(db.name)" title="Backup">
@@ -51,7 +55,7 @@
             <thead><tr><th>Database</th><th>Size</th><th>Actions</th></tr></thead>
             <tbody>
               <tr v-for="db in dbs" :key="db.name">
-                <td class="font-mono text-sm whitespace-nowrap">{{ db.name }}</td>
+                <td class="font-mono text-sm whitespace-nowrap">{{ db.name }}<span v-if="db.neutralized === true" class="ml-2 text-[10px] uppercase tracking-wide text-emerald-400 border border-emerald-700/50 rounded px-1.5 py-0.5" title="No outgoing mail, crons or payments">neutralized</span><span v-else-if="db.neutralized === false" class="ml-2 text-[10px] uppercase tracking-wide text-amber-400 border border-amber-700/50 rounded px-1.5 py-0.5" title="May hold live data and integrations">not neutralized</span></td>
                 <td class="text-slate-400 text-sm">{{ db.size }}</td>
                 <td>
                   <div class="flex gap-2">
@@ -228,11 +232,12 @@ import { api } from '@/api'
 import { ref, watch } from 'vue'
 import { useNotificationsStore } from '@/stores/notifications'
 import OpenAsModal from '@/components/OpenAsModal.vue'
+import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps<{ projectName: string; active: boolean }>()
 const notify = useNotificationsStore()
 
-interface DB { name: string; size: string; size_bytes: number }
+interface DB { name: string; size: string; size_bytes: number; neutralized?: boolean | null }
 interface Backup { filename: string; size: string; modified: string }
 interface Schedule {
   enabled: boolean; schedule: string; retention: number;
@@ -247,6 +252,20 @@ const error = ref('')
 const modal = ref<{ title: string; body: string; placeholder?: string; confirm: () => void } | null>(null)
 const modalInput = ref('')
 const credential = ref<{ title: string; login: string; password: string } | null>(null)
+const auth = useAuthStore()
+const restoreTesting = ref(false)
+
+async function restoreTest() {
+  restoreTesting.value = true
+  try {
+    const res = await api(`/api/db/${props.projectName}/restore-test`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    const d = await res.json()
+    if (res.ok && d.ok) notify.add('success', `Backup ${d.backup} restores fine (${d.checks.users} users, ${d.checks.modules} modules, ${d.seconds}s)`)
+    else notify.add('error', d.error ? `Backup test failed: ${d.error}` : 'Backup test failed')
+  } catch (e: any) { notify.add('error', String(e)) }
+  restoreTesting.value = false
+}
+
 const openAsDb = ref('')
 function openAs(dbname: string) { openAsDb.value = dbname }
 

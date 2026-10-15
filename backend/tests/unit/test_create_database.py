@@ -10,7 +10,8 @@ def fakes(monkeypatch):
     monkeypatch.setattr(db_service, 'exec_in_container_sync',
                         lambda container, cmd: (calls.append(('init', container, list(cmd))) or (0, b'')))
     monkeypatch.setattr(db_service, 'neutralize_database',
-                        lambda project, dbname: calls.append(('neutralize', project, dbname)))
+                        lambda project, dbname, db_port=None: calls.append(('neutralize', project, dbname)))
+    monkeypatch.setattr(db_service, 'lock_down_database', lambda port, dbname: calls.append(('lock', dbname)))
     monkeypatch.setattr(db_service, 'set_odoo_user_password',
                         lambda project, port, dbname, login='admin': calls.append(('password', dbname, login)) or 'pw')
     return calls
@@ -20,8 +21,8 @@ def test_new_database_is_initialised_neutralized_and_gets_an_individual_password
     login, password = db_service.create_odoo_database('alpha', 15432, 'scratch')
     assert (login, password) == ('admin', 'pw')
     steps = [c[0] for c in fakes]
-    # order matters: initialise, then mark it neutralized, then set the password
-    assert steps == ['init', 'neutralize', 'password']
+    # order matters: initialise, neutralize, lock down, then set the password
+    assert steps == ['init', 'neutralize', 'lock', 'password']
     assert fakes[1][1:] == ('alpha', 'scratch')
 
 

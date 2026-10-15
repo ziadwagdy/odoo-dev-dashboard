@@ -16,6 +16,7 @@ urlpatterns = [
     path('db/<str:project>/neutralize/<str:dbname>', views.db_neutralize),
     path('db/<str:project>/drop/<str:dbname>', views.db_drop),
     path('db/<str:project>/create', views.db_create),
+    path('db/<str:project>/restore-test', views.db_restore_test),
     path('db/<str:project>/login-users/<str:dbname>', views.db_login_users),
     path('db/<str:project>/login-link/<str:dbname>', views.db_login_link),
     path('db/<str:project>/admin-password/<str:dbname>', views.db_admin_password),

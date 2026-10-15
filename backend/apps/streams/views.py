@@ -7,7 +7,12 @@ import psutil
 from django.http import StreamingHttpResponse
 
 from asgiref.sync import sync_to_async
-from services.registry import read_registry
+import os
+
+from django.conf import settings
+
+from services import lifecycle
+from services.registry import read_registry, get_project
 from services.stream_auth import sse_auth
 from apps.projects.models import UserProjectAssignment
 
@@ -166,20 +171,22 @@ async def stream_stats(request, container_name):
 
 @sse_auth(project_arg='project', roles={'admin','manager'})
 async def stream_module_update(request, project, dbname, module_name):
-    container_name = f'{project}-app'
-    cmd = f'odoo -c /tmp/odoo-runtime.conf -d {dbname} -u {module_name} --stop-after-init'
+    """Update a module with a pre-update snapshot (see services/lifecycle.run_module_update)."""
+    p = get_project(project)
+    backup_dir = os.path.join(settings.DATA_DIR, 'backups', project)
 
     async def generate():
         loop = asyncio.get_running_loop()
         out_queue: asyncio.Queue = asyncio.Queue()
 
+        def emit(line):
+            loop.call_soon_threadsafe(out_queue.put_nowait, line)
+
         def _run():
             try:
-                _exit_code, output = exec_in_container(container_name, cmd)
-                for chunk in output:
-                    line = (chunk if isinstance(chunk, str) else chunk.decode('utf-8', errors='replace')).rstrip()
-                    if line:
-                        loop.call_soon_threadsafe(out_queue.put_nowait, line)
+                lifecycle.run_module_update(project, p['db_port'], dbname, module_name, emit, backup_dir)
+            except Exception as e:
+                emit(f'Update failed: {e}')
             finally:
                 loop.call_soon_threadsafe(out_queue.put_nowait, None)
 
