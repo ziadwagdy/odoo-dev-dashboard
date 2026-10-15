@@ -11,7 +11,7 @@
         <div class="text-xs text-slate-500 uppercase tracking-wide mb-2">[{{ section }}]</div>
         <div v-for="(val, key) in kv" :key="key" class="flex flex-col sm:flex-row sm:items-center gap-2 mb-3">
           <span class="font-mono text-xs text-slate-400 sm:w-48 sm:shrink-0 font-semibold">{{ key }}</span>
-          <input class="input flex-1 text-xs font-mono w-full" :value="val" @input="updateConf(section as string, key as string, ($event.target as HTMLInputElement).value)" />
+          <input class="input flex-1 text-xs font-mono w-full" :type="isSecret(key as string) ? 'password' : 'text'" :autocomplete="isSecret(key as string) ? 'new-password' : 'off'" :placeholder="isSecret(key as string) ? 'hidden — type to replace' : ''" :value="val" @input="updateConf(section as string, key as string, ($event.target as HTMLInputElement).value)" />
         </div>
       </div>
     </div>
@@ -24,7 +24,7 @@
       </div>
       <div v-for="(val, key) in env" :key="key" class="flex flex-col sm:flex-row sm:items-center gap-2 mb-3">
         <span class="font-mono text-xs text-slate-400 sm:w-48 sm:shrink-0 font-semibold">{{ key }}</span>
-        <input class="input flex-1 text-xs font-mono w-full" :value="val" @input="updateEnv(key as string, ($event.target as HTMLInputElement).value)" />
+        <input class="input flex-1 text-xs font-mono w-full" :type="isSecret(key as string) ? 'password' : 'text'" :autocomplete="isSecret(key as string) ? 'new-password' : 'off'" :placeholder="isSecret(key as string) ? 'hidden — type to replace' : ''" :value="val" @input="updateEnv(key as string, ($event.target as HTMLInputElement).value)" />
       </div>
       <div v-if="!Object.keys(env).length" class="text-sm text-slate-500">No .env file found.</div>
     </div>
@@ -51,6 +51,9 @@
 </template>
 
 <script setup lang="ts">
+// the backend masks secret values; show them as password inputs and never prefill the real value
+const isSecret = (key: string) => /(pass|secret|token|api_?key|private)/i.test(key)
+
 import { api } from '@/api'
 import { ref, computed, watch } from 'vue'
 import { useNotificationsStore } from '@/stores/notifications'

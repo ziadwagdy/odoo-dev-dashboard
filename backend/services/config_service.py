@@ -1,6 +1,21 @@
 import configparser
 import os
+import re
 from django.conf import settings
+
+
+# Secrets are never sent to the browser: values of keys that look like secrets are
+# replaced by MASK on read, and MASK sent back on write means "keep the stored value".
+MASK = '********'
+_SECRET_KEY = re.compile(r'(pass|secret|token|api_?key|private)', re.I)
+
+
+def is_secret_key(key):
+    return bool(_SECRET_KEY.search(str(key)))
+
+
+def _mask(value, key):
+    return MASK if value and is_secret_key(key) else value
 
 
 def _project_dir(project_name, folder=None):
@@ -53,7 +68,7 @@ def read_odoo_conf(project_name, folder=None, conf_file=None):
     cp.read(path)
     result = {}
     for section in cp.sections():
-        result[section] = dict(cp[section])
+        result[section] = {k: _mask(v, k) for k, v in cp[section].items()}
     return result
 
 
@@ -69,6 +84,8 @@ def write_odoo_conf(project_name, data: dict, folder=None, conf_file=None):
         if not cp.has_section(section):
             cp.add_section(section)
         for k, v in kv.items():
+            if v == MASK:        # unchanged secret shown as a mask in the UI
+                continue
             cp.set(section, k, str(v))
     with open(path, 'w') as f:
         cp.write(f)
@@ -86,7 +103,8 @@ def read_env_file(project_name, folder=None):
                 continue
             if '=' in line:
                 k, _, v = line.partition('=')
-                result[k.strip()] = v.strip().strip('"').strip("'")
+                key = k.strip()
+                result[key] = _mask(v.strip().strip('"').strip("'"), key)
     return result
 
 
@@ -109,7 +127,10 @@ def write_env_file(project_name, data: dict, folder=None):
             continue
         if '=' in stripped:
             k = stripped.partition('=')[0].strip()
-            if k in data:
+            if k in data and data[k] == MASK:
+                new_lines.append(line)
+                written_keys.add(k)
+            elif k in data:
                 new_lines.append(f'{k}={data[k]}\n')
                 written_keys.add(k)
             else:
@@ -117,7 +138,7 @@ def write_env_file(project_name, data: dict, folder=None):
 
     # Append new keys
     for k, v in data.items():
-        if k not in written_keys:
+        if k not in written_keys and v != MASK:
             new_lines.append(f'{k}={v}\n')
 
     with open(path, 'w') as f:

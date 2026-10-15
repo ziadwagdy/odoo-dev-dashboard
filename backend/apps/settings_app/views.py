@@ -6,8 +6,14 @@ from core.permissions import IsAdmin
 from services.registry import get_project
 from services.config_service import read_odoo_conf, write_odoo_conf, read_env_file, write_env_file
 from services.cron_scheduler import reschedule_job
-from apps.projects.models import CronJob, AuditLog
+from apps.projects.models import CronJob, AuditLog, UserProjectAssignment
 from apps.projects.serializers import CronJobSerializer
+
+
+def _can_access(user, project):
+    if user.groups.filter(name='admin').exists():
+        return True
+    return UserProjectAssignment.objects.filter(user=user, project_name=project).exists()
 
 
 def _audit(project, action, detail='', outcome='success', user=''):
@@ -19,6 +25,8 @@ def _audit(project, action, detail='', outcome='success', user=''):
 
 @api_view(['GET'])
 def odoo_conf_read(request, project):
+    if not _can_access(request.user, project):
+        return Response({'error': 'Access denied'}, status=403)
     p = get_project(project)
     if not p:
         return Response({'error': 'project not found'}, status=404)
@@ -45,6 +53,8 @@ def odoo_conf_write(request, project):
 
 @api_view(['GET'])
 def env_read(request, project):
+    if not _can_access(request.user, project):
+        return Response({'error': 'Access denied'}, status=403)
     p = get_project(project)
     if not p:
         return Response({'error': 'project not found'}, status=404)
