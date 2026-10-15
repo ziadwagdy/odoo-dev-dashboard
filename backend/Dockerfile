@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.12-slim AS base
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
@@ -28,6 +28,15 @@ ENV PYTHONPATH=/app
 # Use uv's managed venv
 ENV PATH="/app/.venv/bin:$PATH"
 
+# ── test image: same code and dependencies plus the test tooling ───────────
+#    docker build --target test -t dashboard-backend-test backend
+FROM base AS test
+RUN uv pip install --python /app/.venv/bin/python pytest pytest-django pytest-mock freezegun
+ENV SECRET_KEY=test-only-not-a-secret DJANGO_SETTINGS_MODULE=core.test_settings
+CMD ["pytest", "-q"]
+
+# ── runtime image (default build target: must stay the last stage) ─────────
+FROM base AS runtime
 EXPOSE 8000
 
 COPY entrypoint.sh /entrypoint.sh

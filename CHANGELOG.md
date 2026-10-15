@@ -5,6 +5,14 @@ Format: [version] — date
 
 ---
 
+## [1.7.15] — 2026-10-15
+
+### Added (development process, no runtime change)
+- **Automated tests, written test-first from here on** (`docs/ROADMAP.md`): 109 backend tests (unit + API, ~3 s, run in a `--target test` image that has no Docker socket and no network), 8 frontend tests (vitest), a read-only live smoke test (76 checks) and a contract test for the `dashboard_login` addon against real Odoo 17/18/19 containers. Entry points: `scripts/check.sh [--live]`, `scripts/test-backend.sh`, `scripts/test-frontend.sh`, `scripts/smoke.sh`, `scripts/test-addon.sh`.
+- Dockerfile is multi-stage (`base` → `test` / `runtime`); the production image is unchanged and still has no test tooling.
+
+---
+
 ## [1.7.14] — 2026-10-15
 
 ### Changed
