@@ -39,13 +39,38 @@ def _db_endpoint(db_port):
     return settings.DB_HOST, int(db_port)
 
 
+SECRETS_DIR = os.path.join(settings.ODOO_DEV_BASE, 'secrets')
+
+
+def project_password(project_name):
+    """Per-project Postgres password from secrets/<project>.pgpass (the same file the
+    Odoo container mounts as ~/.pgpass); falls back to the legacy shared password."""
+    try:
+        with open(os.path.join(SECRETS_DIR, f'{project_name}.pgpass')) as f:
+            line = f.readline().strip()
+        # host:port:database:user:password — password may contain escaped ':' or '\\'
+        return re.sub(r'\\(.)', r'\1', line.split(':', 4)[4])
+    except (OSError, IndexError):
+        return settings.DB_PASSWORD
+
+
+def _db_password(db_port):
+    try:
+        for p in read_registry():
+            if str(p.get('db_port')) == str(db_port):
+                return project_password(p['name'])
+    except Exception:
+        pass
+    return settings.DB_PASSWORD
+
+
 def _connect(db_port, dbname='postgres'):
     host, port = _db_endpoint(db_port)
     return psycopg2.connect(
         host=host,
         port=port,
         user=settings.DB_USER,
-        password=settings.DB_PASSWORD,
+        password=_db_password(db_port),
         dbname=dbname,
         connect_timeout=5,
     )
@@ -77,7 +102,7 @@ def backup_database(db_port, dbname, backup_dir):
     filename = f'{dbname}-{ts}.dump'
     filepath = os.path.join(backup_dir, filename)
     host, port = _db_endpoint(db_port)
-    env = {**os.environ, 'PGPASSWORD': settings.DB_PASSWORD}
+    env = {**os.environ, 'PGPASSWORD': _db_password(db_port)}
     result = subprocess.run(
         ['pg_dump', '-h', host, '-p', str(port),
          '-U', settings.DB_USER, '-F', 'c', '-f', filepath, dbname],
@@ -109,7 +134,7 @@ def restore_database(db_port, dbname, backup_filepath, project_name=None):
         raise RuntimeError(f'Failed to prepare database: {e}')
 
     host, port = _db_endpoint(db_port)
-    env = {**os.environ, 'PGPASSWORD': settings.DB_PASSWORD}
+    env = {**os.environ, 'PGPASSWORD': _db_password(db_port)}
     result = subprocess.run(
         ['pg_restore', '-h', host, '-p', str(port),
          '-U', settings.DB_USER, '-d', dbname, '--no-owner', '--no-acl', backup_filepath],

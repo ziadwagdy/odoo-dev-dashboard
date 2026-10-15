@@ -5,6 +5,16 @@ Format: [version] — date
 
 ---
 
+## [1.7.14] — 2026-10-15
+
+### Changed
+- **Project header:** *Open as…* (database + user picker, passwordless, audited) replaces the plain *Open* link. **Deploy** and **Delete** moved out of the header into a new admin-only **Manage** tab (Deploy, live deploy output, Danger zone). `POST /api/project/<name>/deploy` is now admin-only on the server too.
+
+### Security
+- **Per-project database passwords.** New projects get their own random password for the `odoo_app` role, stored in `~/odoo-dev/secrets/<project>.pgpass` and mounted as the container's `~/.pgpass`; `odoo.conf` has no `db_password`, the compose file has no `PASSWORD`, and the stock entrypoint (which would put `--db_password` on the command line) is bypassed with `entrypoint: ["odoo"]`. The dashboard reads the same file; the initdb SQL that carried the password is blanked after first start. `scripts/pgpass-rollout.py` migrates existing stacks with automatic rollback.
+
+---
+
 ## [1.7.13] — 2026-10-15
 
 ### Changed (breaking for the Settings tab)

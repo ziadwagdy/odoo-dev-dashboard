@@ -55,26 +55,16 @@
             </svg>
             Start
           </button>
-          <button class="btn btn-primary min-h-[44px]" @click="deploy">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-            </svg>
-            Deploy
-          </button>
-          <a v-if="project.url" :href="'https://' + project.url" target="_blank" class="btn btn-ghost min-h-[44px]">
+          <button class="btn btn-primary min-h-[44px]" @click="showOpenAs = true" title="Sign in to a database of this project without a password">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
             </svg>
-            Open
-          </a>
-          <button v-if="auth.canDelete" class="btn btn-danger min-h-[44px]" @click="showDeleteModal = true">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-            </svg>
-            Delete
+            Open as…
           </button>
         </div>
       </div>
+
+      <OpenAsModal v-if="showOpenAs" :project-name="name" @close="showOpenAs = false" />
 
       <!-- Delete confirmation modal -->
       <Teleport to="body">
@@ -138,9 +128,26 @@
         </div>
       </Teleport>
 
-      <!-- Deploy panel -->
-      <DeployPanel :project-name="name" ref="deployPanel" />
 
+      <!-- Manage (admins only): deploy and delete -->
+      <div v-if="auth.isAdmin" v-show="activeTab === 'manage'" class="space-y-4">
+        <div class="card">
+          <h3 class="text-sm font-semibold text-slate-300 mb-1">Deploy</h3>
+          <p class="text-xs text-slate-500 mb-3">Pull the latest code for this project and restart it. Output appears below.</p>
+          <button class="btn btn-primary min-h-[44px]" @click="deploy">Deploy now</button>
+        </div>
+        <DeployPanel :project-name="name" ref="deployPanel" />
+        <div class="card border border-red-900/40">
+          <h3 class="text-sm font-semibold text-red-400 mb-1">Danger zone</h3>
+          <p class="text-xs text-slate-500 mb-3">Deleting a project stops its containers and removes its data. This cannot be undone.</p>
+          <button v-if="auth.canDelete" class="btn btn-danger min-h-[44px]" @click="showDeleteModal = true">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+            </svg>
+            Delete
+          </button>
+        </div>
+      </div>
       <!-- Tabs -->
       <div class="border-b border-border mb-6 flex gap-0.5 md:gap-1 overflow-x-auto">
         <button
@@ -294,6 +301,7 @@ import CpuGauge from '@/components/CpuGauge.vue'
 import MemoryBar from '@/components/MemoryBar.vue'
 import LogViewer from '@/components/LogViewer.vue'
 import DeployPanel from '@/components/DeployPanel.vue'
+import OpenAsModal from '@/components/OpenAsModal.vue'
 import DatabaseTab from '@/components/DatabaseTab.vue'
 import ModulesTab from '@/components/ModulesTab.vue'
 import BranchTab from '@/components/BranchTab.vue'
@@ -336,6 +344,7 @@ const activeTab   = ref((route.query.tab as string) || 'overview')
 const deployPanel = ref<InstanceType<typeof DeployPanel> | null>(null)
 
 const showDeleteModal   = ref(false)
+const showOpenAs        = ref(false)
 const deleteConfirmText = ref('')
 const deleting          = ref(false)
 
@@ -367,6 +376,7 @@ const allTabs = [
   { id: 'branches',      label: 'Branches',      adminOnly: false },
   { id: 'settings',      label: 'Settings',      adminOnly: false },
   { id: 'notebook',      label: 'Notebook',      adminOnly: false },
+  { id: 'manage',        label: 'Manage',        adminOnly: true  },
 ]
 const tabs = computed(() => allTabs.filter(t => !t.adminOnly || auth.isAdmin))
 

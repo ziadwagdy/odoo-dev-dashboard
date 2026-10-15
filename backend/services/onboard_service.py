@@ -7,6 +7,7 @@ from pathlib import Path
 from django.conf import settings
 
 from services.registry import read_registry
+from services.db_service import project_password
 
 
 ODOO_DEV_BASE = os.environ.get('ODOO_DEV_BASE', '/home/zeyad/odoo-dev')
@@ -177,6 +178,15 @@ def detect_addons(repo_dir):
     return sorted(addons)
 
 
+def _odoo_ids(image):
+    """uid/gid of the `odoo` user in the image (the .pgpass file must be readable by it)."""
+    from services.docker_service import get_docker_client
+    out = get_docker_client().containers.run(image, ['sh', '-c', 'id -u odoo; id -g odoo'],
+                                             entrypoint='', remove=True)
+    uid, gid = out.decode().split()[:2]
+    return int(uid), int(gid)
+
+
 def build_addons_path(version, hr_base_mode, addons=()):
     """addons: module paths relative to the repo root (from detect_addons).
     Every directory that directly holds a module becomes an entry, so nested
@@ -266,7 +276,17 @@ USER odoo
     # app/dashboard never use, and db_user is created as a plain LOGIN+CREATEDB
     # role by an initdb script.
     db_user = settings.DB_USER
-    db_password = settings.DB_PASSWORD
+    # Per-project password: a leak of one project's credentials opens only that project.
+    # It lives in secrets/<project>.pgpass (mounted as ~/.pgpass in the Odoo container and
+    # read by the dashboard) — never in odoo.conf, the compose file, env or argv.
+    db_password = secrets.token_urlsafe(24)
+    pgpass_path = Path(ODOO_DEV_BASE) / 'secrets' / f'{project_name}.pgpass'
+    pgpass_path.parent.mkdir(mode=0o700, exist_ok=True)
+    esc = lambda v: v.replace('\\', '\\\\').replace(':', '\\:')
+    pgpass_path.write_text(f'*:5432:*:{esc(db_user)}:{esc(db_password)}\n')
+    pgpass_path.chmod(0o600)
+    uid, gid = _odoo_ids(f'odoo:{version}.0')
+    os.chown(pgpass_path, uid, gid)
     pg_admin_user = 'odoo'
     pg_admin_password = secrets.token_urlsafe(24)
 
@@ -282,13 +302,13 @@ USER odoo
     # odoo.conf
     (config_dir / 'odoo.conf').write_text(f"""[options]
 admin_passwd = {admin_passwd}
-addons_path = {addons_path}
+addons_path = {addons_path},/mnt/dashboard-addons
 data_dir = /var/lib/odoo
 
 db_host = db-{project_name}
 db_port = 5432
 db_user = {db_user}
-db_password = {db_password}
+# no db_password here: the password comes from ~/.pgpass (mounted from secrets/)
 
 list_db = True
 proxy_mode = True
@@ -312,6 +332,8 @@ limit_time_real = 1200
         f'      - ./repo:/mnt/project-addons:ro',
         f'      - {ODOO_DEV_BASE}/worktrees/enterprise-{version}:/mnt/enterprise-addons:ro',
     ]
+    volume_lines.append(f'      - {ODOO_DEV_BASE}/dashboard-addons:/mnt/dashboard-addons:ro')
+    volume_lines.append(f'      - {pgpass_path}:/var/lib/odoo/.pgpass:ro')
     if hr_base_mode == 'yes-mount':
         volume_lines.append(
             f'      - {ODOO_DEV_BASE}/worktrees/hr-base-{version}:/mnt/hr-base-addons:ro'
@@ -347,6 +369,10 @@ limit_time_real = 1200
     build: .
     container_name: {project_name}-app
     restart: unless-stopped
+    # bypass the stock entrypoint: it would put --db_password on the command line.
+    # Host and user come from odoo.conf, the password from ~/.pgpass.
+    entrypoint: ["odoo"]
+    command: ["-c", "/etc/odoo/odoo.conf"]
     depends_on:
       db-{project_name}:
         condition: service_healthy
@@ -354,10 +380,6 @@ limit_time_real = 1200
       - "127.0.0.1:{odoo_port}:8069"
     volumes:
 {chr(10).join(volume_lines)}
-    environment:
-      - HOST=db-{project_name}
-      - USER={db_user}
-      - PASSWORD={db_password}
 
 networks:
   default:
@@ -417,7 +439,7 @@ def verify_db_access(project_name, emit, timeout=90):
         try:
             conn = psycopg2.connect(
                 host=host, port=5432, user=settings.DB_USER,
-                password=settings.DB_PASSWORD, dbname='postgres', connect_timeout=5,
+                password=project_password(project_name), dbname='postgres', connect_timeout=5,
             )
             conn.close()
             _log(emit, f'Dashboard DB access verified ({settings.DB_USER}@{host})')
@@ -428,6 +450,17 @@ def verify_db_access(project_name, emit, timeout=90):
     raise Exception(
         f'Dashboard cannot connect to {host} as {settings.DB_USER}: {last_err}'
     )
+
+
+def scrub_initdb(project_name, emit):
+    """The role-creation SQL carries the project's DB password and must be world-readable
+    for the postgres user during first init; once the role exists it is not needed."""
+    path = Path(ODOO_DEV_BASE) / project_name / 'initdb' / '01-app-role.sql'
+    try:
+        path.write_text('-- role already created; password lives in secrets/<project>.pgpass\n')
+        _log(emit, 'Removed the DB password from initdb/01-app-role.sql')
+    except Exception as e:
+        _log(emit, f'Could not scrub initdb SQL: {e}', error=True)
 
 
 def update_dozzle(project_name, emit):

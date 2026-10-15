@@ -93,12 +93,8 @@ def _get_project_storage(project: dict) -> dict:
     # Database: sum pg_database_size for all non-system DBs
     if db_port:
         try:
-            import psycopg2
-            conn = psycopg2.connect(
-                host=settings.DB_HOST, port=int(db_port),
-                user=settings.DB_USER, password=settings.DB_PASSWORD,
-                dbname='postgres', connect_timeout=3,
-            )
+            from .db_service import _connect
+            conn = _connect(db_port)
             cur = conn.cursor()
             cur.execute(
                 "SELECT COALESCE(SUM(pg_database_size(datname)), 0) FROM pg_database "

@@ -162,6 +162,7 @@ def start_onboard(request):
             emit({'type': 'phase_start', 'phase': 'start'})
             onboard_service.start_containers(project_name, emit)
             onboard_service.verify_db_access(project_name, emit)
+            onboard_service.scrub_initdb(project_name, emit)
             emit({'type': 'phase_done', 'phase': 'start'})
 
             # ── register ───────────────────────────────────────────

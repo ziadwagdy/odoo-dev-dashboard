@@ -318,7 +318,7 @@ def module_update(request, project, dbname, module_name):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAdmin])
 def deploy_project(request, name):
     if not _can_access_project(request.user, name):
         return Response({'error': 'Access denied'}, status=403)
