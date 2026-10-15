@@ -12,7 +12,6 @@ from urllib.parse import parse_qs
 
 from asgiref.sync import sync_to_async
 from django.http import JsonResponse
-from rest_framework.authtoken.models import Token
 
 from services.registry import read_registry
 from apps.projects.models import UserProjectAssignment
@@ -22,13 +21,8 @@ SAFE_NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.,-]{0,127}$')
 
 
 def _lookup_user(key):
-    if not key:
-        return None
-    try:
-        user = Token.objects.select_related('user').get(key=key).user
-    except Token.DoesNotExist:
-        return None
-    return user if user.is_active else None
+    from core.authentication import user_for_token_key
+    return user_for_token_key(key)
 
 
 def _token_from_request(request):

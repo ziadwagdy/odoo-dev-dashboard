@@ -1,12 +1,13 @@
 import os
 import re
+import secrets
 import subprocess
 from datetime import datetime
 import psycopg2
 from psycopg2 import sql
 from django.conf import settings
 
-from .docker_service import exec_in_container_sync
+from .docker_service import exec_in_container_sync, get_docker_client
 from .registry import read_registry
 
 
@@ -327,3 +328,71 @@ def list_modules_grouped(db_port, dbname, project_name, odoo_dev_base, folder=No
         ordered.insert(0, {'label': 'Odoo Core', 'kind': 'core', 'path': '/usr/lib/\u2026/odoo/addons', 'modules': core_modules})
 
     return {'groups': ordered}
+
+
+# ── Odoo database lifecycle without shared passwords ─────────────────────
+#
+# Odoo's own database manager needs the master password. The dashboard does
+# the same operations directly in Postgres as the logged-in user (audited),
+# so nobody needs to know or share the master password. These helpers create
+# a database and set an individual, random, shown-once admin login.
+
+_LOGIN = re.compile(r'^[A-Za-z0-9_.@+-]{1,64}$')
+
+
+def _hash_odoo_password(project_name, password):
+    """pbkdf2 hash computed inside the project's own Odoo container (passlib is
+    already there), the password is passed via environment, never argv."""
+    container = get_docker_client().containers.get(f'{project_name}-app')
+    code = ("import os\nfrom passlib.context import CryptContext\n"
+            "print(CryptContext(['pbkdf2_sha512'], pbkdf2_sha512__rounds=600000)"
+            ".hash(os.environ['PW']))")
+    res = container.exec_run(['python3', '-c', code], environment={'PW': password}, demux=False)
+    lines = (res.output or b'').decode(errors='replace').strip().splitlines()
+    hashed = lines[-1].strip() if lines else ''
+    if res.exit_code != 0 or not hashed.startswith('$pbkdf2-sha512$'):
+        raise RuntimeError('could not compute the password hash inside the project container')
+    return hashed
+
+
+def set_odoo_user_password(project_name, db_port, dbname, login='admin'):
+    """Set a fresh random password for an Odoo user and return it (shown once)."""
+    _check_db_name(dbname)
+    if not isinstance(login, str) or not _LOGIN.match(login):
+        raise ValueError('invalid login')
+    password = secrets.token_urlsafe(18)
+    hashed = _hash_odoo_password(project_name, password)
+    conn = _connect(db_port, dbname)
+    try:
+        cur = conn.cursor()
+        cur.execute('UPDATE res_users SET password = %s WHERE login = %s AND active', (hashed, login))
+        if cur.rowcount != 1:
+            raise LookupError(f'no active user with login {login!r} in {dbname}')
+        conn.commit()
+    finally:
+        conn.close()
+    return password
+
+
+def create_odoo_database(project_name, db_port, dbname, demo=False):
+    """Initialise a brand-new Odoo database (base module) via the project's own
+    container and give its admin user a random password. Returns (login, password)."""
+    _check_db_name(dbname)
+    _check_db_name(project_name)
+    if dbname in list_database_names(db_port):
+        raise ValueError(f'database {dbname!r} already exists')
+    cmd = ['odoo', '-c', '/etc/odoo/odoo.conf', '-d', dbname, '-i', 'base', '--stop-after-init']
+    if not demo:
+        cmd.append('--without-demo=all')
+    exit_code, output = exec_in_container_sync(f'{project_name}-app', cmd)
+    if exit_code != 0:
+        tail = (output.decode(errors='replace') if isinstance(output, bytes) else str(output))[-600:]
+        raise RuntimeError(f'odoo initialisation failed: {tail}')
+    return 'admin', set_odoo_user_password(project_name, db_port, dbname, 'admin')
+
+
+def list_database_names(db_port):
+    result = list_databases(db_port)
+    if isinstance(result, dict):  # {'error': ...}
+        raise RuntimeError(result['error'])
+    return [d['name'] for d in result]

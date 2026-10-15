@@ -19,7 +19,8 @@ from services.health_service import get_all_project_storage
 from services.docker_service import get_container_status, restart_container, start_container, stop_container, get_container_logs, get_docker_client
 from services.git_service import get_git_info, get_commit_log, get_current_commit, get_addons_path, git_pull, switch_branch, get_branches_quick
 from services.db_service import (list_databases, backup_database, duplicate_database, drop_database,
-                                  list_modules_grouped, list_backup_files, restore_database, neutralize_database)
+                                  list_modules_grouped, list_backup_files, restore_database, neutralize_database,
+                                  set_odoo_user_password, create_odoo_database)
 from state import deploy_queues, get_deploy_lock
 from .models import DeployHistory, BackupSchedule, AuditLog, UserProjectAssignment
 from .serializers import DeployHistorySerializer, BackupScheduleSerializer, AuditLogSerializer
@@ -528,3 +529,59 @@ def delete_project(request, name):
 
     _audit(name, 'project_delete', '', user=request.user.username)
     return Response({'ok': True, 'manual_commands': manual_commands})
+
+
+def _is_admin_or_manager(user):
+    return user.groups.filter(name__in=['admin', 'manager']).exists()
+
+
+def _no_store(response):
+    response['Cache-Control'] = 'no-store'
+    return response
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def db_create(request, project):
+    """Create a new, empty Odoo database. The admin password is generated and
+    returned once to the logged-in user; no master password is involved."""
+    if not _can_access_project(request.user, project):
+        return Response({'error': 'Access denied'}, status=403)
+    p = get_project(project)
+    if not p:
+        return Response({'error': 'project not found'}, status=404)
+    name = str(request.data.get('name', '')).strip()
+    demo = bool(request.data.get('demo', False))
+    try:
+        login_name, password = create_odoo_database(p['name'], p['db_port'], name, demo=demo)
+    except ValueError as e:
+        return Response({'ok': False, 'error': str(e)}, status=400)
+    except Exception as e:
+        _audit(project, 'db_create', name, outcome='failed', user=request.user.username)
+        return Response({'ok': False, 'error': str(e)}, status=500)
+    _audit(project, 'db_create', f'{name} (demo={demo})', user=request.user.username)
+    return _no_store(Response({'ok': True, 'name': name, 'login': login_name, 'password': password}))
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def db_admin_password(request, project, dbname):
+    """Issue an individual, random, shown-once Odoo login for this database
+    (replaces sharing a fixed admin password). Admin/manager only, audited."""
+    if not _can_access_project(request.user, project):
+        return Response({'error': 'Access denied'}, status=403)
+    if not _is_admin_or_manager(request.user):
+        return Response({'error': 'Manager or admin privileges required.'}, status=403)
+    p = get_project(project)
+    if not p:
+        return Response({'error': 'project not found'}, status=404)
+    login_name = str(request.data.get('login', 'admin')).strip() or 'admin'
+    try:
+        password = set_odoo_user_password(p['name'], p['db_port'], dbname, login_name)
+    except (ValueError, LookupError) as e:
+        return Response({'ok': False, 'error': str(e)}, status=400)
+    except Exception as e:
+        _audit(project, 'db_admin_password', f'{dbname}/{login_name}', outcome='failed', user=request.user.username)
+        return Response({'ok': False, 'error': str(e)}, status=500)
+    _audit(project, 'db_admin_password', f'{dbname}/{login_name}', user=request.user.username)
+    return _no_store(Response({'ok': True, 'login': login_name, 'password': password}))

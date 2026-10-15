@@ -4,10 +4,15 @@
     <div class="card mb-4">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
         <h3 class="text-sm font-semibold text-slate-300">Databases</h3>
+        <div class="flex gap-2">
+        <button class="btn btn-primary btn-sm w-full sm:w-auto inline-flex items-center gap-1.5" @click="createDb">
+          + New database
+        </button>
         <button class="btn btn-ghost btn-sm w-full sm:w-auto inline-flex items-center gap-1.5" @click="loadDbs">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
           Refresh
         </button>
+        </div>
       </div>
       <div v-if="loading" class="text-sm text-slate-500">Loading…</div>
       <div v-else-if="error" class="text-sm text-red-400">{{ error }}</div>
@@ -23,6 +28,9 @@
               </button>
               <button class="btn btn-ghost btn-sm p-2 min-h-[44px] min-w-[44px]" @click="duplicate(db.name)" title="Duplicate">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+              </button>
+              <button class="btn btn-ghost btn-sm p-2 min-h-[44px] min-w-[44px] text-xs" @click="issueAdminLogin(db.name)" title="Issue a one-time admin login">
+                Login
               </button>
               <button class="btn btn-ghost btn-sm p-2 min-h-[44px] min-w-[44px]" @click="neutralize(db.name)" title="Neutralize">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
@@ -51,6 +59,9 @@
                     <button class="btn btn-ghost btn-sm text-xs inline-flex items-center gap-1" @click="duplicate(db.name)">
                       <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
                       Duplicate
+                    </button>
+                    <button class="btn btn-ghost btn-sm text-xs inline-flex items-center gap-1" @click="issueAdminLogin(db.name)">
+                      Admin login
                     </button>
                     <button class="btn btn-ghost btn-sm text-xs inline-flex items-center gap-1" @click="neutralize(db.name)">
                       <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
@@ -173,6 +184,22 @@
       </div>
     </div>
 
+    <!-- One-time credential -->
+    <div v-if="credential" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div class="bg-[#1a1d27] border border-[#2d3148] rounded-xl p-6 w-[calc(100vw-2rem)] max-w-md">
+        <h4 class="font-semibold text-white mb-2">{{ credential.title }}</h4>
+        <p class="text-sm text-slate-400 mb-3">Shown once. It is not stored anywhere — copy it now. Issuing a new one replaces it.</p>
+        <div class="text-xs text-slate-500">Login</div>
+        <div class="font-mono text-sm text-white mb-2 break-all">{{ credential.login }}</div>
+        <div class="text-xs text-slate-500">Password</div>
+        <div class="font-mono text-sm text-white mb-4 break-all select-all">{{ credential.password }}</div>
+        <div class="flex gap-2 justify-end">
+          <button class="btn btn-ghost" @click="copyCredential">Copy password</button>
+          <button class="btn btn-primary" @click="credential = null">Done</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal -->
     <div v-if="modal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" @click.self="modal = null">
       <div class="bg-[#1a1d27] border border-[#2d3148] rounded-xl p-6 w-[calc(100vw-2rem)] max-w-md">
@@ -210,6 +237,56 @@ const loading = ref(false)
 const error = ref('')
 const modal = ref<{ title: string; body: string; placeholder?: string; confirm: () => void } | null>(null)
 const modalInput = ref('')
+const credential = ref<{ title: string; login: string; password: string } | null>(null)
+
+async function copyCredential() {
+  if (!credential.value) return
+  try { await navigator.clipboard.writeText(credential.value.password); notify.add('success', 'Copied') }
+  catch { notify.add('error', 'Copy failed — select the password and copy it manually') }
+}
+
+function createDb() {
+  modalInput.value = ''
+  modal.value = {
+    title: 'New database',
+    body: 'Enter a name for the new empty database (letters, digits, <code>_ . -</code>). An individual admin password is generated for you.',
+    placeholder: 'database name',
+    confirm: async () => {
+      const name = modalInput.value.trim()
+      modal.value = null
+      if (!name) return
+      notify.add('info', `Creating ${name}… this takes a minute`)
+      const res = await api(`/api/db/${props.projectName}/create`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, demo: false }),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        credential.value = { title: `Database "${data.name}" created`, login: data.login, password: data.password }
+        loadDbs()
+      } else {
+        notify.add('error', data.error || 'Failed')
+      }
+    },
+  }
+}
+
+function issueAdminLogin(dbname: string) {
+  modalInput.value = ''
+  modal.value = {
+    title: `Admin login for "${dbname}"`,
+    body: 'Sets a new random password for the <code>admin</code> user of this database and shows it to you once. The previous admin password stops working. This action is recorded in the audit log with your name.',
+    confirm: async () => {
+      modal.value = null
+      const res = await api(`/api/db/${props.projectName}/admin-password/${dbname}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
+      })
+      const data = await res.json()
+      if (data.ok) credential.value = { title: `Admin login for "${dbname}"`, login: data.login, password: data.password }
+      else notify.add('error', data.error || 'Failed')
+    },
+  }
+}
 
 const loaded = ref(false)
 watch(() => props.active, (v) => { if (v && !loaded.value) { loadDbs(); loadBackups() } })

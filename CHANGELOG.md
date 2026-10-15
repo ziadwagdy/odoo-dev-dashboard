@@ -5,6 +5,20 @@ Format: [version] — date
 
 ---
 
+## [1.7.10] — 2026-10-15
+
+### Security
+- **Sessions expire.** `core/authentication.ExpiringTokenAuthentication` enforces an absolute lifetime (`SESSION_MAX_HOURS`, default 12) measured from login and an idle timeout (`SESSION_IDLE_MINUTES`, default 120). The same validator (`user_for_token_key`) is used by DRF views, the SSE streams and the notebook WebSocket, so a revoked/expired token stops working everywhere.
+- **Login hardening:** a fresh token per login (old tokens are invalidated), lockout after 5 failed attempts per username / 30 per client IP for 15 minutes (HTTP 429), and failed/blocked logins are written to the audit log with the client IP (`CF-Connecting-IP`).
+- **Password policy:** minimum 12 characters, not all digits, not the username, not repetitive (create user and change password).
+- **Admin can revoke a user's sessions:** `POST /api/auth/users/<id>/revoke-sessions` (audited).
+
+### Added
+- **Create database without a master password:** `POST /api/db/<project>/create` initialises a new Odoo database through the project's own container and returns an individual, random admin password once (`Cache-Control: no-store`). UI: *+ New database* on the Database tab.
+- **Issue an individual admin login:** `POST /api/db/<project>/admin-password/<db>` (admin/manager, audited) sets a fresh random password for `admin` (hashed inside the project container, passed via environment, never argv) and shows it once. UI: *Admin login* per database. Replaces sharing a fixed admin password.
+
+---
+
 ## [1.7.9] — 2026-10-15
 
 ### Security
