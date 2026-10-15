@@ -21,6 +21,7 @@ from services.git_service import get_git_info, get_commit_log, get_current_commi
 from services.db_service import (list_databases, backup_database, duplicate_database, drop_database,
                                   list_modules_grouped, list_backup_files, restore_database, neutralize_database,
                                   set_odoo_user_password, create_odoo_database)
+from services import sso as sso_service
 from state import deploy_queues, get_deploy_lock
 from .models import DeployHistory, BackupSchedule, AuditLog, UserProjectAssignment
 from .serializers import DeployHistorySerializer, BackupScheduleSerializer, AuditLogSerializer
@@ -585,3 +586,42 @@ def db_admin_password(request, project, dbname):
         return Response({'ok': False, 'error': str(e)}, status=500)
     _audit(project, 'db_admin_password', f'{dbname}/{login_name}', user=request.user.username)
     return _no_store(Response({'ok': True, 'login': login_name, 'password': password}))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def db_login_users(request, project, dbname):
+    """Users of an Odoo database that the logged-in dashboard user may sign in as."""
+    if not _can_access_project(request.user, project):
+        return Response({'error': 'Access denied'}, status=403)
+    p = get_project(project)
+    if not p:
+        return Response({'error': 'project not found'}, status=404)
+    try:
+        return Response({'users': sso_service.list_login_candidates(p['db_port'], dbname)})
+    except ValueError as e:
+        return Response({'error': str(e)}, status=400)
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def db_login_link(request, project, dbname):
+    """Return a 60-second, one-time link that signs the dashboard user into the
+    chosen Odoo database as the chosen user. No password is created or shared."""
+    if not _can_access_project(request.user, project):
+        return Response({'error': 'Access denied'}, status=403)
+    p = get_project(project)
+    if not p:
+        return Response({'error': 'project not found'}, status=404)
+    login_name = str(request.data.get('login', 'admin')).strip() or 'admin'
+    try:
+        url = sso_service.build_login_url(p, p['db_port'], dbname, login_name)
+    except (ValueError, LookupError) as e:
+        return Response({'ok': False, 'error': str(e)}, status=400)
+    except Exception as e:
+        _audit(project, 'db_login_link', f'{dbname} as {login_name}', outcome='failed', user=request.user.username)
+        return Response({'ok': False, 'error': str(e)}, status=500)
+    _audit(project, 'db_login_link', f'{dbname} as {login_name}', user=request.user.username)
+    return _no_store(Response({'ok': True, 'url': url, 'expires_in': sso_service.LINK_TTL}))

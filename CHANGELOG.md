@@ -5,6 +5,16 @@ Format: [version] — date
 
 ---
 
+## [1.7.12] — 2026-10-15
+
+### Added
+- **"Open as…" — sign in to any Odoo database without a password.** New Odoo addon `dashboard_login` (in `~/odoo-dev/dashboard-addons`, mounted read-only at `/mnt/dashboard-addons` in every stack; one codebase for Odoo 17, 18 and 19). The dashboard issues a 60-second, one-time, HMAC-signed link for the logged-in dashboard user and a chosen Odoo user; the addon verifies it and opens a normal Odoo session (record rules and the user's MFA still apply). Replay, tampered, expired, over-long, unknown-user, wrong-database and open-redirect cases are all refused (tested on real 17/18/19 containers). The addon installs itself on first use in a database. The HMAC key is derived from the project's otherwise unused master password, so no extra secret is distributed. Endpoints: `GET /api/db/<project>/login-users/<db>`, `POST /api/db/<project>/login-link/<db>` (audited with dashboard user, database and target user). UI: **Open as…** on every database.
+
+### Security
+- Default-credential audit of every Odoo database (offline hash check): `admin/admin` on four databases and `login == password` on several demo/portal/personal accounts were reset to random values; nobody needs them any more.
+
+---
+
 ## [1.7.11] — 2026-10-15
 
 ### Security

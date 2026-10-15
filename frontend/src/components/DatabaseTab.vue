@@ -29,8 +29,11 @@
               <button class="btn btn-ghost btn-sm p-2 min-h-[44px] min-w-[44px]" @click="duplicate(db.name)" title="Duplicate">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
               </button>
-              <button class="btn btn-ghost btn-sm p-2 min-h-[44px] min-w-[44px] text-xs" @click="issueAdminLogin(db.name)" title="Issue a one-time admin login">
-                Login
+              <button class="btn btn-primary btn-sm p-2 min-h-[44px] min-w-[44px] text-xs" @click="openAs(db.name)" title="Open this database signed in as a user — no password needed">
+                Open as…
+              </button>
+              <button class="btn btn-ghost btn-sm p-2 min-h-[44px] min-w-[44px] text-xs" @click="issueAdminLogin(db.name)" title="Issue a one-time admin password">
+                Password
               </button>
               <button class="btn btn-ghost btn-sm p-2 min-h-[44px] min-w-[44px]" @click="neutralize(db.name)" title="Neutralize">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
@@ -60,8 +63,11 @@
                       <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
                       Duplicate
                     </button>
+                    <button class="btn btn-primary btn-sm text-xs inline-flex items-center gap-1" @click="openAs(db.name)">
+                      Open as…
+                    </button>
                     <button class="btn btn-ghost btn-sm text-xs inline-flex items-center gap-1" @click="issueAdminLogin(db.name)">
-                      Admin login
+                      Admin password
                     </button>
                     <button class="btn btn-ghost btn-sm text-xs inline-flex items-center gap-1" @click="neutralize(db.name)">
                       <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
@@ -184,6 +190,23 @@
       </div>
     </div>
 
+    <!-- Open as… picker -->
+    <div v-if="picker" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" @click.self="picker = null">
+      <div class="bg-[#1a1d27] border border-[#2d3148] rounded-xl p-6 w-[calc(100vw-2rem)] max-w-md">
+        <h4 class="font-semibold text-white mb-1">Open "{{ picker.db }}"</h4>
+        <p class="text-sm text-slate-400 mb-3">Signs you in directly — no password is created or shared. The link works once, for 60 seconds, and is recorded in the audit log with your name.</p>
+        <div v-if="picker.loading" class="text-sm text-slate-500 mb-4">Loading users…</div>
+        <select v-else v-model="picker.login" class="input w-full mb-4">
+          <option v-for="u in picker.users" :key="u.login" :value="u.login">{{ u.name }} ({{ u.login }}){{ u.admin ? ' — admin' : '' }}</option>
+        </select>
+        <p v-if="picker.error" class="text-sm text-red-400 mb-3">{{ picker.error }}</p>
+        <div class="flex gap-2 justify-end">
+          <button class="btn btn-ghost" @click="picker = null">Cancel</button>
+          <button class="btn btn-primary" :disabled="picker.loading || picker.busy || !picker.login" @click="confirmOpenAs">Open</button>
+        </div>
+      </div>
+    </div>
+
     <!-- One-time credential -->
     <div v-if="credential" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
       <div class="bg-[#1a1d27] border border-[#2d3148] rounded-xl p-6 w-[calc(100vw-2rem)] max-w-md">
@@ -238,6 +261,41 @@ const error = ref('')
 const modal = ref<{ title: string; body: string; placeholder?: string; confirm: () => void } | null>(null)
 const modalInput = ref('')
 const credential = ref<{ title: string; login: string; password: string } | null>(null)
+const picker = ref<{ db: string; users: { login: string; name: string; admin: boolean }[]; login: string; loading: boolean; busy: boolean; error: string } | null>(null)
+
+async function openAs(dbname: string) {
+  picker.value = { db: dbname, users: [], login: '', loading: true, busy: false, error: '' }
+  try {
+    const res = await api(`/api/db/${props.projectName}/login-users/${dbname}`)
+    const data = await res.json()
+    if (!picker.value) return
+    if (!res.ok) { picker.value.error = data.error || 'Could not load users'; picker.value.loading = false; return }
+    picker.value.users = data.users
+    picker.value.login = (data.users.find((u: any) => u.login === 'admin') || data.users[0] || {}).login || ''
+  } catch (e: any) {
+    if (picker.value) picker.value.error = String(e)
+  }
+  if (picker.value) picker.value.loading = false
+}
+
+async function confirmOpenAs() {
+  const p = picker.value
+  if (!p) return
+  // open the tab synchronously (inside the click) so the popup blocker allows it
+  const win = window.open('about:blank', '_blank')
+  p.busy = true; p.error = ''
+  try {
+    const res = await api(`/api/db/${props.projectName}/login-link/${p.db}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ login: p.login }),
+    })
+    const data = await res.json()
+    if (data.ok && win) { win.location.href = data.url; picker.value = null }
+    else { win?.close(); p.error = data.error || 'Failed'; p.busy = false }
+  } catch (e: any) {
+    win?.close(); p.error = String(e); p.busy = false
+  }
+}
 
 async function copyCredential() {
   if (!credential.value) return
