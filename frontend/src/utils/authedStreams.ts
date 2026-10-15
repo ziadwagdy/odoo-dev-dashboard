@@ -32,3 +32,4 @@ window.WebSocket = class extends NativeWebSocket {
     super(withToken(String(url)), protocols)
   }
 } as typeof WebSocket
+export {}
