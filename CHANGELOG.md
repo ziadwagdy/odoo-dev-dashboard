@@ -5,6 +5,15 @@ Format: [version] — date
 
 ---
 
+## [1.7.13] — 2026-10-15
+
+### Changed (breaking for the Settings tab)
+- **odoo.conf is no longer shown or edited from the dashboard.** The Settings tab now shows an Odoo.sh-style curated set (HTTP workers, cron workers, memory soft/hard limits, CPU/request time limits, requests per worker, DB connections, log level) with types, ranges and the server's resources. The raw `odoo-conf` / `env` endpoints are gone.
+- **Changes are requests, not writes.** `POST /api/settings/<project>/changes` validates (type, range, cross-field rules such as soft < hard and CPU ≤ request time, memory budget against the server's RAM, worker count against vCPUs, verbose log levels) and stores a `ConfigChangeRequest`. An admin sees the exact diff and warnings, must acknowledge warnings, and applies it: the current file is backed up, only the requested keys are rewritten (comments and every other line untouched), the container restarts, a health check runs, and the previous configuration is restored automatically if the application does not come back. Drift since the request was made blocks approval. Everything is in the audit log.
+- Model `ConfigChangeRequest` (migration 0009).
+
+---
+
 ## [1.7.12] — 2026-10-15
 
 ### Added

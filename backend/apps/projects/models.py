@@ -63,3 +63,28 @@ class UserProjectAssignment(models.Model):
     class Meta:
         unique_together = ('user', 'project_name')
         ordering = ['user__username', 'project_name']
+
+
+class ConfigChangeRequest(models.Model):
+    """A requested change to a project's runtime settings. Nothing is written to
+    odoo.conf until an admin has reviewed the validated diff and approved it."""
+    STATUS = [('pending', 'pending'), ('applied', 'applied'), ('rejected', 'rejected'),
+              ('failed', 'failed'), ('cancelled', 'cancelled')]
+
+    project          = models.CharField(max_length=100)
+    requested_by     = models.CharField(max_length=150)
+    requested_at     = models.DateTimeField(auto_now_add=True)
+    status           = models.CharField(max_length=20, choices=STATUS, default='pending')
+    changes          = models.JSONField(default=dict)    # {key: new value (UI units)}
+    previous         = models.JSONField(default=dict)    # {key: value at request time}
+    warnings         = models.JSONField(default=list)
+    reason           = models.TextField(blank=True, default='')
+    restart_required = models.BooleanField(default=True)
+    decided_by       = models.CharField(max_length=150, blank=True, default='')
+    decided_at       = models.DateTimeField(null=True, blank=True)
+    decision_note    = models.TextField(blank=True, default='')
+    applied_at       = models.DateTimeField(null=True, blank=True)
+    result           = models.TextField(blank=True, default='')
+
+    class Meta:
+        ordering = ['-requested_at']
