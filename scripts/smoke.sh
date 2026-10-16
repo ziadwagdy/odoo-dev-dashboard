@@ -52,7 +52,8 @@ for c in $(docker ps --format '{{.Names}}' | grep -E -- '-db$'); do
 done
 
 echo "== detection"
-if docker logs odoo-dev-dashboard-backend-1 2>&1 | grep -q "security watcher started"; then ok "security watcher is running"; else bad "security watcher did not start"; fi
+backend_log=$(docker logs odoo-dev-dashboard-backend-1 2>&1)     # not "| grep -q": pipefail + SIGPIPE would misreport
+if [[ "$backend_log" == *"security watcher started"* ]]; then ok "security watcher is running"; else bad "security watcher did not start"; fi
 expect "security alerts need a token"       "401"     "$(code $DASH/api/security/alerts)"
 expect "push subscription needs a token"    "401"     "$(code -X POST $DASH/api/push/subscribe)"
 expect "service worker is served"           "200"     "$(code $DASH/sw.js)"
