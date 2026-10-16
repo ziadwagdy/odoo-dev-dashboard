@@ -5,6 +5,21 @@ Format: [version] — date
 
 ---
 
+## [1.10.0] — 2026-10-16
+
+Phase 4a of `docs/ROADMAP.md` (detection and alerting), built test-first. Replaces the hourly log-polling jobs.
+
+### Added
+- **Always-on detection** (`services/detection.py`, `alerting.py`, `log_watcher.py`, `security_watch.py`): the dashboard streams every project database's log in real time and applies rules derived from the 2026 incident: `COPY … PROGRAM` / external-program attempts (critical), password-authentication failures (warning, escalating to high at 5 and critical at 20 repeats), `pg_hba` rejections (high). Repeats are folded into one alert with a count; payloads and secrets are scrubbed from the evidence line; the stream reconnects when a container restarts.
+- **In-dashboard alerts:** a *Security* page (admins) with acknowledge-with-note, and a live badge in the sidebar.
+- **Web Push** (`services/webpush.py`): admins can enable push notifications on any browser or phone (VAPID, no third-party account). High/critical alerts and escalations are pushed; plain new warnings stay in the dashboard. Payloads never contain evidence lines. Dead subscriptions are removed automatically. Service worker at `/sw.js`.
+- Optional `SECURITY_IGNORE` (comma-separated tokens) to silence known sources, `SECURITY_WATCH=off` to disable.
+
+### Tests
+- 237 backend tests including a full alert drill (log line → alert → push); live drill with a real denied `COPY … PROGRAM` and a wrong-password login produced the expected critical and warning alerts.
+
+---
+
 ## [1.9.0] — 2026-10-15
 
 Phase 2 of `docs/ROADMAP.md` (database lifecycle safety), built test-first.

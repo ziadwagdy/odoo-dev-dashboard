@@ -13,6 +13,7 @@ const router = createRouter({
     { path: '/health', component: () => import('@/views/HealthView.vue') },
     { path: '/onboard', component: () => import('@/views/OnboardView.vue'), meta: { managerOrAdmin: true } },
     { path: '/users', component: () => import('@/views/UsersView.vue'), meta: { adminOnly: true } },
+    { path: '/security', component: () => import('@/views/SecurityView.vue'), meta: { adminOnly: true } },
     { path: '/help', component: () => import('@/views/HelpView.vue') },
   ],
 })

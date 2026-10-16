@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     'apps.notebooks',
     'apps.onboard',
     'apps.auth_api',
+    'apps.security',
 ]
 
 REST_FRAMEWORK = {

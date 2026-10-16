@@ -11,6 +11,9 @@ from services.cron_scheduler import setup_cron_jobs
 
 setup_cron_jobs()
 
+from services import security_watch
+security_watch.start()
+
 application = ProtocolTypeRouter({
     'http': get_asgi_application(),
     'websocket': URLRouter(websocket_urlpatterns),

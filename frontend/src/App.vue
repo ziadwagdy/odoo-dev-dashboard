@@ -47,6 +47,7 @@ import { useConfigStore } from '@/stores/config'
 import { useProjectsStore } from '@/stores/projects'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
+import { useSecurityStore } from '@/stores/security'
 
 const notifications = useNotificationsStore()
 const config = useConfigStore()
@@ -60,6 +61,7 @@ onMounted(async () => {
   // Fetch projects if already authenticated (restores state after page refresh)
   if (auth.isAuthenticated) {
     useProjectsStore().fetchProjects()
+    if (auth.isAdmin) useSecurityStore().startPolling()
   }
 })
 </script>
