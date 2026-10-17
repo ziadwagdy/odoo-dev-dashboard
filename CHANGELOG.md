@@ -5,6 +5,13 @@ Format: [version] — date
 
 ---
 
+## [1.10.1] — 2026-10-17
+
+### Fixed
+- The Security page had no sidebar and no way back; it now uses the same layout and breadcrumb as every other page. A regression test (`views/layout.test.ts`) fails if any page (except login) is missing the sidebar layout or breadcrumb.
+
+---
+
 ## [1.10.0] — 2026-10-16
 
 Phase 4a of `docs/ROADMAP.md` (detection and alerting), built test-first. Replaces the hourly log-polling jobs.

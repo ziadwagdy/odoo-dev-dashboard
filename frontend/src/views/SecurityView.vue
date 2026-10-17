@@ -1,5 +1,10 @@
 <template>
-  <div class="p-4 sm:p-6 max-w-5xl mx-auto">
+  <SidebarLayout>
+    <template #breadcrumb>
+      <Breadcrumb :crumbs="[{ label: 'Security' }]" />
+    </template>
+
+    <div class="max-w-5xl">
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
       <div>
         <h1 class="text-xl font-bold text-white">Security alerts</h1>
@@ -38,11 +43,14 @@
         <button v-if="a.status === 'open'" class="btn btn-ghost btn-sm shrink-0" @click="ack(a.id)">Acknowledge…</button>
       </div>
     </div>
-  </div>
+    </div>
+  </SidebarLayout>
 </template>
 
 <script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue'
+import SidebarLayout from '@/layouts/SidebarLayout.vue'
+import Breadcrumb from '@/components/Breadcrumb.vue'
 import { useSecurityStore } from '@/stores/security'
 
 const sec = useSecurityStore()
