@@ -523,6 +523,14 @@ def delete_project(request, name):
     except Exception as e:
         return Response({'error': f'Failed to update registry: {e}'}, status=500)
 
+    # Everything else the project owns: its database credential and the backups held by the dashboard
+    if re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]*', name):
+        try:
+            os.remove(os.path.join(base, 'secrets', f'{name}.pgpass'))
+        except FileNotFoundError:
+            pass
+        shutil.rmtree(os.path.join(settings.DATA_DIR, 'backups', name), ignore_errors=True)
+
     # Remove from Dozzle filter and restart Dozzle
     dozzle_compose = os.path.join(base, 'dozzle', 'docker-compose.yml')
     container_name = f'{name}-app'

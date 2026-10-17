@@ -26,7 +26,6 @@ PROJECTS = {
     'omc-holding': ('omc-holding-db', 'omc-holding-app', 'omc-holding', 'omc-holding-app', 'omc-holding/config/odoo.conf', 18191),
     'sivas':       ('sivas-db', 'sivas-app', 'sivas', 'sivas-app', 'sivas/config/odoo.conf', 8082),
     'albadiya':    ('albadiya-db', 'albadiya-app', 'albadiya', 'albadiya-app', 'albadiya/config/odoo.conf', 8072),
-    'cnc':         ('cnc-db', 'cnc-app', 'cnc', 'cnc-app', 'cnc/config/odoo.conf', 8080),
     'iba':         ('iba-db', 'iba-app', 'iba', 'iba-app', 'iba/config/odoo.conf', 8078),
     'medtechcorp': ('medtechcorp-db', 'medtechcorp-app', 'medtechcorp', 'medtechcorp-app', 'medtechcorp/config/odoo.conf', 8076),
     'vodafone':    ('vodafone-db', 'vodafone-app', 'vodafone', 'vodafone-app', 'vodafone/config/odoo.conf', 8079),

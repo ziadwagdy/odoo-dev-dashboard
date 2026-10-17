@@ -14,10 +14,10 @@ for p in read_registry():
         except Exception as e: states.append(f"{d}=?({str(e)[:30]})")
     print(f"  {p['name']:12} " + ", ".join(states))
 
-print("== 2. live restore test on cnc (backup -> scratch DB -> checks -> drop)")
-p = get_project("cnc"); bdir = os.path.join(settings.DATA_DIR, "backups", "cnc")
-path, name = db_service.backup_database(p["db_port"], "cnc", bdir)
-r = lifecycle.restore_check("cnc", p["db_port"], path, bdir)
+print("== 2. live restore test on vodafone (backup -> scratch DB -> checks -> drop)")
+p = get_project("vodafone"); bdir = os.path.join(settings.DATA_DIR, "backups", "vodafone")
+path, name = db_service.backup_database(p["db_port"], "vodafone", bdir)
+r = lifecycle.restore_check("vodafone", p["db_port"], path, bdir)
 print("  result:", {k: r[k] for k in ("ok", "checks", "seconds", "error")})
 left = [d for d in listing(p) if d.startswith("zz-restore-test-")]
 print("  scratch databases left behind:", left or "none")
