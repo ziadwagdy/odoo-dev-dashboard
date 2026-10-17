@@ -158,3 +158,13 @@ DB_PASSWORD=odoo
 ```
 
 
+
+## Development process
+
+- **TDD.** Write the failing test first. Phases and exit criteria are in `docs/ROADMAP.md`.
+- **Test entry points:** `scripts/check.sh [--live] [--ui]` runs everything; `scripts/test-backend.sh` (pytest in a Docker test target), `scripts/test-frontend.sh` (vitest), `scripts/test-ui.sh` (Playwright headless Chrome, dark and light), `scripts/test-addon.sh` (`dashboard_login` on Odoo 17/18/19), `scripts/smoke.sh` (live, read-only).
+- **UI rules:** use theme tokens (`bg-surface`, `border-border`), never hard-coded hex that only works in one theme (`src/theme.test.ts` guards this); every UI change gets a Playwright test and its screenshots in `~/ui-test-artifacts/` are looked at.
+- **Least exposure:** no ports, host paths or container ids in the UI/API for non-admins (`services/exposure.py`).
+- **Access:** role policy lives in `services/access_policy.py`; secrets are per-project `.pgpass`; "Open as" uses signed one-time links (`services/sso.py`).
+- **Security detection:** `services/detection.py` (rules) -> `alerting.py` (dedupe/escalate) -> Web Push + `/security`; `persistence_scan.py` baselines each DB and alerts on new code actions, admins, API keys; `digest.py` sends a daily summary. Scheduled in `cron_scheduler.setup_security_jobs`.
+- Root-owned files are modified through the backend container; destructive/credential steps are handed to the user as scripts.

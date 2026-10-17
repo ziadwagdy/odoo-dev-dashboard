@@ -34,6 +34,7 @@ def setup_cron_jobs():
             CronJob.objects.create(project=name, schedule=DEFAULT_SCHEDULE, enabled=True)
         # Schedule all enabled deploy jobs
         setup_restore_test_job()
+        setup_security_jobs()
         scheduler = get_scheduler()
         for job in CronJob.objects.filter(enabled=True):
             _add_job(scheduler, job)
@@ -244,3 +245,38 @@ def setup_restore_test_job():
     if not scheduler.get_job('restore-tests'):
         scheduler.add_job(run_weekly_restore_tests, CronTrigger(day_of_week='sun', hour=3, minute=30),
                           id='restore-tests', replace_existing=True, max_instances=1, coalesce=True)
+
+
+def run_persistence_scan():
+    from django import db
+    from services import security_watch
+    from services.persistence_scan import scan_all
+    db.close_old_connections()
+    try:
+        scan_all(security_watch.make_handler())
+    finally:
+        db.close_old_connections()
+
+
+def run_daily_digest():
+    from django import db
+    from services import webpush
+    from services.digest import send_daily_digest
+    from apps.security.models import PushSubscription
+    db.close_old_connections()
+    try:
+        def send(title, body, severity):
+            payload = {'title': title, 'body': body, 'severity': severity, 'url': '/security', 'tag': 'daily-digest'}
+            for sub in PushSubscription.objects.filter(user__groups__name='admin').distinct():
+                webpush._deliver(sub, payload)
+        send_daily_digest(send)
+    finally:
+        db.close_old_connections()
+
+
+def setup_security_jobs():
+    scheduler = get_scheduler()
+    scheduler.add_job(run_persistence_scan, CronTrigger(minute='*/10'), id='persistence-scan',
+                      replace_existing=True, max_instances=1, coalesce=True)
+    scheduler.add_job(run_daily_digest, CronTrigger(hour=8, minute=0), id='daily-digest',
+                      replace_existing=True, max_instances=1, coalesce=True)

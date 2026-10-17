@@ -55,7 +55,7 @@
     <!-- Module groups -->
     <div v-for="group in filteredGroups" :key="group.label" class="card p-0 overflow-hidden">
       <!-- Group header -->
-      <div class="flex items-center gap-2 px-4 py-2.5 border-b border-[#2d3148] cursor-pointer select-none hover:bg-white/[0.02]"
+      <div class="flex items-center gap-2 px-4 py-2.5 border-b border-border cursor-pointer select-none hover:bg-white/[0.02]"
         @click="toggleGroup(group.label)">
         <input type="checkbox"
           class="accent-indigo-500 shrink-0"
@@ -75,7 +75,7 @@
       <!-- Module rows -->
       <div v-if="!collapsed.has(group.label)">
         <div v-for="mod in visibleModules(group)" :key="mod.name"
-          class="flex items-center gap-3 px-4 py-2 border-b border-[#1e2235] last:border-0 hover:bg-white/[0.02] cursor-pointer"
+          class="flex items-center gap-3 px-4 py-2 border-b border-border/60 last:border-0 hover:bg-white/[0.02] cursor-pointer"
           :class="{ 'bg-indigo-500/5': selectedModules.has(mod.name) }"
           @click="toggleModule(mod.name)">
           <input type="checkbox"
@@ -120,7 +120,7 @@
     <!-- Update All confirmation modal -->
     <Teleport to="body">
       <div v-if="confirmUpdateAll" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" @click.self="confirmUpdateAll = false">
-        <div class="bg-[#1a1d2e] border border-[#2d3148] rounded-xl shadow-2xl p-6 w-full max-w-sm mx-4">
+        <div class="bg-surface border border-border rounded-xl shadow-2xl p-6 w-full max-w-sm mx-4">
           <div class="flex items-center gap-3 mb-4">
             <svg class="w-5 h-5 text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
@@ -147,7 +147,7 @@
 
     <!-- Update log -->
     <div v-if="logLines.length > 0" class="card p-0 overflow-hidden">
-      <div class="flex items-center justify-between px-4 py-2.5 border-b border-[#2d3148]">
+      <div class="flex items-center justify-between px-4 py-2.5 border-b border-border">
         <div class="flex items-center gap-2">
           <svg v-if="updating" class="w-3.5 h-3.5 animate-spin text-indigo-400" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>

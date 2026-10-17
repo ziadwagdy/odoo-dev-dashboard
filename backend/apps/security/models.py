@@ -34,3 +34,15 @@ class PushSubscription(models.Model):
     user_agent = models.CharField(max_length=300, blank=True, default='')
     created    = models.DateTimeField(auto_now_add=True)
     last_ok    = models.DateTimeField(null=True, blank=True)
+
+
+class SeenItem(models.Model):
+    """Something already present in a database the last time it was scanned (the persistence baseline)."""
+    scope      = models.CharField(max_length=200, db_index=True)    # "<project>:<db>", or "baseline" for markers
+    kind       = models.CharField(max_length=30)
+    item_id    = models.CharField(max_length=100)
+    label      = models.CharField(max_length=300, blank=True, default='')
+    first_seen = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [('scope', 'kind', 'item_id')]
