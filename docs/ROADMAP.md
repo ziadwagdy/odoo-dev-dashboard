@@ -24,6 +24,7 @@ Source material: `~/odoo-hosting-research/reports/Odoo hosting security and usab
 | Integration (API) | DRF endpoints with Django test DB: authN/authZ matrix, change-request workflow, audit entries. Docker, Postgres and the filesystem are **faked at the boundary** | `backend/tests/api` | every commit, < 60 s |
 | Contract (Odoo addon) | `dashboard_login` against real Odoo 17/18/19 containers with a scratch database | `scripts/test-addon.sh` | before addon changes and each release |
 | Frontend unit | Auth store, stream-auth wrapper, settings diff logic | `frontend/src/**/*.test.ts` (vitest) | every commit |
+| UI (headless Chrome) | Real browser against the live dashboard in dark and light theme: layout, stacking, themed surfaces, role visibility, no leaked internals, flows | `frontend/e2e` | `scripts/test-ui.sh`, before each UI release |
 | Smoke (live, read-only) | Health, unauthenticated 401s, nginx blocks, DB listing, process args, shared-password-dead | `scripts/smoke.sh` | after every deploy |
 
 Rules: tests never touch real containers except the contract/smoke layers; a bug found in
@@ -94,6 +95,11 @@ Docker build target (`--target test`) so the production image stays `--no-dev`;
 2. `CHANGELOG.md` entry and version bump; commit message states the *why*.
 3. Deployed through the normal build; `scripts/smoke.sh` green on the live host.
 4. Rollback verified (or explicitly "revert commit").
+4b. **UI work respects the existing design system and is tested in a real browser:** new UI uses the
+   theme tokens/classes (`bg-surface`, `border-border`, the light-theme overrides in `style.css`), never
+   introduces colours that only work in one theme, and gets a headless-Chrome test
+   (`scripts/test-ui.sh`, Playwright) that runs in **both** the dark and light theme, checks the
+   behaviour it adds, and leaves screenshots in `~/ui-test-artifacts/` that are looked at.
 5. Evidence recorded: what was tested, what was observed.
 
 ## 5. Open decisions (need the owner)

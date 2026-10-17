@@ -129,6 +129,18 @@
       </Teleport>
 
 
+      <!-- Tabs -->
+      <div class="border-b border-border mb-6 flex gap-0.5 md:gap-1 overflow-x-auto">
+        <button
+          v-for="tab in tabs"
+          :key="tab.id"
+          class="tab-btn text-xs md:text-sm whitespace-nowrap"
+          :class="{ active: activeTab === tab.id }"
+          @click="activeTab = tab.id"
+        >{{ tab.label }}</button>
+      </div>
+
+      <!-- Tab content -->
       <!-- Manage (admins only): deploy and delete -->
       <div v-if="auth.isAdmin" v-show="activeTab === 'manage'" class="space-y-4">
         <div class="card">
@@ -148,53 +160,25 @@
           </button>
         </div>
       </div>
-      <!-- Tabs -->
-      <div class="border-b border-border mb-6 flex gap-0.5 md:gap-1 overflow-x-auto">
-        <button
-          v-for="tab in tabs"
-          :key="tab.id"
-          class="tab-btn text-xs md:text-sm whitespace-nowrap"
-          :class="{ active: activeTab === tab.id }"
-          @click="activeTab = tab.id"
-        >{{ tab.label }}</button>
-      </div>
 
-      <!-- Tab content -->
       <div v-show="activeTab === 'overview'">
         <!-- Stack info -->
         <div class="grid grid-cols-2 md:grid-cols-4 gap-5 mb-6">
           <div class="card">
-            <div class="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Container</div>
-            <div class="font-mono text-sm text-white">{{ project.container }}</div>
+            <div class="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Odoo version</div>
+            <div class="font-mono text-sm text-white">{{ project.version }}</div>
           </div>
           <div class="card">
             <div class="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Branch</div>
             <div class="font-mono text-sm text-white">{{ project.branch || '—' }}</div>
           </div>
           <div class="card">
-            <div class="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Odoo Port</div>
-            <div class="font-mono text-sm text-white">{{ project.odoo_port }}</div>
+            <div class="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Updates to pull</div>
+            <div class="font-mono text-sm text-white">{{ project.pending_count ?? 0 }}</div>
           </div>
           <div class="card">
-            <div class="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">DB Port</div>
-            <div class="font-mono text-sm text-white">{{ project.db_port }}</div>
-          </div>
-        </div>
-        <!-- Addons paths -->
-        <div class="card mb-4" v-if="(project.addons_paths as unknown[])?.length">
-          <h3 class="text-sm font-bold mb-4 text-slate-200 uppercase tracking-wider">Addons Paths</h3>
-          <div class="space-y-2">
-            <div v-for="ap in project.addons_paths as AddonPath[]" :key="ap.path" class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 text-xs min-w-0">
-              <span class="px-2.5 py-1 rounded-lg text-xs font-mono font-semibold shrink-0"
-                :class="{
-                  'bg-gradient-to-r from-blue-500/20 to-blue-600/20 text-blue-300 border border-blue-500/40': ap.kind === 'core',
-                  'bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 border border-amber-500/40': ap.kind === 'enterprise',
-                  'bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-300 border border-green-500/40': ap.kind === 'extra',
-                  'bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 border border-purple-500/40': ap.kind === 'project' || ap.kind === 'project-sub',
-                  'bg-slate-800/50 text-slate-400 border border-slate-700/50': ap.kind === 'other',
-                }">{{ ap.label }}</span>
-              <code class="text-slate-500 break-all">{{ ap.path }}</code>
-            </div>
+            <div class="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Address</div>
+            <div class="font-mono text-sm text-white break-all">{{ project.url }}</div>
           </div>
         </div>
         <!-- Recent commits -->
@@ -278,7 +262,7 @@
       <LogViewer v-show="activeTab === 'logs'" :container="project.container as string" :container-id="(project.container_id as string) || ''" :logs-url="config.logsUrl" :active="activeTab === 'logs'" />
       <DatabaseTab v-show="activeTab === 'database'" :project-name="name" :active="activeTab === 'database'" />
       <ModulesTab v-show="activeTab === 'modules'" :project-name="name" :active="activeTab === 'modules'" />
-      <BranchTab v-show="activeTab === 'branches'" :project-name="name" :folder="(project.folder as string | null)" :container="(project.container as string)" :active="activeTab === 'branches'" :can-switch="auth.canSwitchBranch" @branch-changed="onBranchChanged" @container-restarted="refreshStatus" />
+      <BranchTab v-show="activeTab === 'branches'" :project-name="name" :uses-hr-base="!!project.uses_hr_base" :container="(project.container as string)" :active="activeTab === 'branches'" :can-switch="auth.canSwitchBranch" @branch-changed="onBranchChanged" @container-restarted="refreshStatus" />
       <SettingsTab v-show="activeTab === 'settings'" :project-name="name" :active="activeTab === 'settings'" />
       <NotebookTab v-show="activeTab === 'notebook'" :project-name="name" :active="activeTab === 'notebook'" />
     </template>
@@ -308,7 +292,6 @@ import BranchTab from '@/components/BranchTab.vue'
 import SettingsTab from '@/components/SettingsTab.vue'
 import NotebookTab from '@/components/NotebookTab.vue'
 
-interface AddonPath { path: string; kind: string; label: string }
 interface Commit { hash: string; subject: string; author: string; date: string }
 interface DeployRecord {
   id: number

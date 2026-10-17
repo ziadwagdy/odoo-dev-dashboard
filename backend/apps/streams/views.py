@@ -301,7 +301,7 @@ async def stream_git_pull(request, project):
     return _sse_response(generate())
 
 
-@sse_auth()
+@sse_auth(roles={'admin', 'manager'})
 async def stream_health_host(request):
     async def generate():
         loop = asyncio.get_running_loop()

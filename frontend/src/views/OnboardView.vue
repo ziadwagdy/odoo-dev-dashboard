@@ -191,19 +191,6 @@
           <div class="text-white font-mono text-sm break-all">{{ form.repoUrl }}</div>
         </div>
 
-        <div v-if="assignedPorts" class="p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
-          <div class="text-xs text-emerald-400 mb-2">Assigned Ports</div>
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <span class="text-slate-400 text-sm">Odoo:</span>
-              <span class="text-white font-semibold ml-2">{{ assignedPorts.odoo_port }}</span>
-            </div>
-            <div>
-              <span class="text-slate-400 text-sm">Database:</span>
-              <span class="text-white font-semibold ml-2">{{ assignedPorts.db_port }}</span>
-            </div>
-          </div>
-        </div>
       </div>
 
       <div class="flex justify-between gap-3">

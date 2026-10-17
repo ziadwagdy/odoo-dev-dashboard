@@ -14,3 +14,40 @@ describe('page layout', () => {
     })
   }
 })
+
+// The header (user menu dropdown) must stack above the scrolling page content; with
+// backdrop-blur it forms its own stacking context, so it needs an explicit z-index.
+const layout = import.meta.glob('../layouts/SidebarLayout.vue', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+describe('header stacking', () => {
+  it('the header sits above the page content so the user dropdown is not covered', () => {
+    const source = Object.values(layout)[0]
+    const header = source.split('\n').find(l => l.includes('<header')) || ''
+    expect(header).toMatch(/\brelative\b/)
+    expect(header).toMatch(/\bz-30\b/)
+  })
+})
+
+// Tab panels belong below the tab bar. The Manage panel (Deploy / Delete) once sat above it.
+const detail = import.meta.glob('./ProjectDetailView.vue', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+describe('project page structure', () => {
+  const source = Object.values(detail)[0]
+  const tabBar = source.indexOf('<!-- Tabs -->')
+
+  it('every tab panel is rendered after the tab bar', () => {
+    expect(tabBar).toBeGreaterThan(0)
+    for (const id of ['overview', 'logs', 'database', 'modules', 'branches', 'settings', 'notebook', 'manage']) {
+      const at = source.indexOf(`activeTab === '${id}'`)
+      expect(at, `panel ${id} exists`).toBeGreaterThan(-1)
+      expect(at, `panel ${id} comes after the tab bar`).toBeGreaterThan(tabBar)
+    }
+  })
+
+  it('Deploy and Delete live only inside the Manage panel', () => {
+    const manage = source.indexOf("activeTab === 'manage'")
+    const deploy = source.indexOf('@click="deploy"')
+    const del = source.indexOf('showDeleteModal = true')
+    expect(deploy).toBeGreaterThan(manage)
+    expect(del).toBeGreaterThan(manage)
+    expect(source.slice(0, source.indexOf('<!-- Tabs -->'))).not.toContain('@click="deploy"')
+  })
+})

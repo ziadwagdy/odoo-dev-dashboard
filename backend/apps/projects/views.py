@@ -23,6 +23,7 @@ from services.db_service import (list_databases, backup_database, duplicate_data
                                   set_odoo_user_password, create_odoo_database)
 from services import sso as sso_service
 from services import lifecycle
+from services.exposure import public_project
 from services.db_service import database_state
 from services.access_policy import can_open_as
 from core.net import client_ip
@@ -61,42 +62,45 @@ def api_storage(request):
     import psutil
     projects = _filter_projects(request.user, read_registry())
     storage = get_all_project_storage(projects)
-    disk = psutil.disk_usage('/')
-    return Response({
-        'projects': storage,
-        'disk_used_gb':  round(disk.used  / 1024 ** 3, 1),
-        'disk_total_gb': round(disk.total / 1024 ** 3, 1),
-        'disk_pct':      round(disk.percent, 1),
-    })
+    data = {'projects': storage}
+    if _is_admin_or_manager(request.user):       # host-wide figures are not for every user
+        disk = psutil.disk_usage('/')
+        data.update({'disk_used_gb': round(disk.used / 1024 ** 3, 1),
+                     'disk_total_gb': round(disk.total / 1024 ** 3, 1),
+                     'disk_pct': round(disk.percent, 1)})
+    return Response(data)
 
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def api_config(request):
-    return Response({
-        'logs_url': settings.LOGS_URL,
-        'files_url': settings.FILES_URL,
-        'terminal_url': settings.TERMINAL_URL,
-        'dashboard_title': settings.DASHBOARD_TITLE,
-    })
+    data = {'dashboard_title': settings.DASHBOARD_TITLE}
+    # links to the internal tools (log viewer, files, terminal) are for admins, never public
+    if request.user and request.user.is_authenticated and _is_admin(request.user):
+        data.update({'logs_url': settings.LOGS_URL, 'files_url': settings.FILES_URL,
+                     'terminal_url': settings.TERMINAL_URL})
+    return Response(data)
 
 
 @api_view(['GET'])
 def api_status(request):
     all_projects = _filter_projects(request.user, read_registry())
-    docker = get_docker_client()
-
+    admin = _is_admin(request.user)
+    docker = get_docker_client() if admin else None
+    out = []
     for p in all_projects:
-        p['status'] = get_container_status(p['container'])
-        p['running'] = p['status'] == 'running'
-        try:
-            p['container_id'] = docker.containers.get(p['container']).short_id
-        except Exception:
-            p['container_id'] = None
-        p['branch'], pending = get_git_info(p.get('folder'))
-        p['pending_count'] = len(pending)
-
-    return Response({'projects': all_projects})
+        item = public_project(p)
+        item['status'] = get_container_status(p['container'])
+        item['running'] = item['status'] == 'running'
+        if admin:
+            try:
+                item['container_id'] = docker.containers.get(p['container']).short_id
+            except Exception:
+                item['container_id'] = None
+        item['branch'], pending = get_git_info(p.get('folder'))
+        item['pending_count'] = len(pending)
+        out.append(item)
+    return Response({'projects': out})
 
 
 @api_view(['POST'])
@@ -310,6 +314,8 @@ def modules_list(request, project, dbname):
     p = get_project(project)
     if not p:
         return Response({'error': 'project not found'}, status=404)
+    if not lifecycle.SAFE_ARG.match(dbname):
+        return Response({'error': 'invalid database name'}, status=400)
     result = list_modules_grouped(p['db_port'], dbname, p['name'], settings.ODOO_DEV_BASE,
                                    folder=p.get('folder'), version=p.get('version'))
     if isinstance(result, dict) and 'error' in result:
@@ -319,11 +325,19 @@ def modules_list(request, project, dbname):
 
 @api_view(['POST'])
 def module_update(request, project, dbname, module_name):
+    """Start a module update: validates, enforces the role the stream will also require, audits,
+    and returns the SSE URL that runs it (see services/lifecycle.run_module_update)."""
     if not _can_access_project(request.user, project):
-        return Response({'error': 'Access denied'}, status=403)
+        return Response({'ok': False, 'error': 'Access denied'}, status=403)
+    if not _is_admin_or_manager(request.user):
+        return Response({'ok': False, 'error': 'Manager or admin privileges required to update modules.'}, status=403)
     p = get_project(project)
     if not p:
-        return Response({'error': 'project not found'}, status=404)
+        return Response({'ok': False, 'error': 'project not found'}, status=404)
+    if not lifecycle.SAFE_ARG.match(dbname) or not lifecycle.SAFE_ARG.match(module_name):
+        return Response({'ok': False, 'error': 'invalid database or module name'}, status=400)
+    _audit(project, 'module_update', f'{dbname}: {module_name}', user=request.user.username,
+           ip=client_ip(request), meta={'db': dbname, 'modules': module_name})
     return Response({'ok': True, 'stream_url': f'/stream/module-update/{project}/{dbname}/{module_name}'})
 
 
@@ -446,18 +460,18 @@ def project_detail(request, name):
     p = get_project(name)
     if not p:
         return Response({'error': 'project not found'}, status=404)
-    p['status'] = get_container_status(p['container'])
-    p['running'] = p['status'] == 'running'
-    try:
-        p['container_id'] = get_docker_client().containers.get(p['container']).short_id
-    except Exception:
-        p['container_id'] = None
-    p['branch'], pending = get_git_info(p.get('folder'))
-    p['pending_count'] = len(pending)
-    p['commits'] = get_commit_log(p.get('folder'), n=10)
-    p['addons_paths'] = get_addons_path(p['name'], p.get('folder'), version=p.get('version'))
-
-    return Response(p)
+    out = public_project(p)
+    out['status'] = get_container_status(p['container'])
+    out['running'] = out['status'] == 'running'
+    if _is_admin(request.user):        # only for the link to the container log viewer
+        try:
+            out['container_id'] = get_docker_client().containers.get(p['container']).short_id
+        except Exception:
+            out['container_id'] = None
+    out['branch'], pending = get_git_info(p.get('folder'))
+    out['pending_count'] = len(pending)
+    out['commits'] = get_commit_log(p.get('folder'), n=10)
+    return Response(out)
 
 
 @api_view(['DELETE'])

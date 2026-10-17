@@ -5,13 +5,10 @@ import { api } from '@/api'
 export interface Project {
   name: string
   version: string
-  odoo_port: string
-  db_port: string
   url: string
   container: string
   container_id?: string
-  folder: string | null
-  conf_file?: string | null
+  uses_hr_base?: boolean
   status: string
   running: boolean
   branch?: string

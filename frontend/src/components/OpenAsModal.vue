@@ -44,6 +44,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { api } from '@/api'
+import { databaseNames } from '@/utils/databases'
 
 const props = defineProps<{ projectName: string; presetDb?: string }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -70,7 +71,7 @@ onMounted(async () => {
   try {
     const res = await api(`/api/db/${props.projectName}/list`)
     const data = await res.json()
-    dbs.value = Array.isArray(data) ? data.map((d: any) => d.name) : []
+    dbs.value = databaseNames(data)
     db.value = props.presetDb && dbs.value.includes(props.presetDb) ? props.presetDb : (dbs.value[0] || '')
   } catch (e: any) { error.value = String(e) }
   loadingDbs.value = false

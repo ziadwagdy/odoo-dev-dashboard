@@ -7,9 +7,14 @@ export const useConfigStore = defineStore('config', () => {
   const terminalUrl = ref('')
   const dashboardTitle = ref('Odoo Dev Dashboard')
 
+  // The title is public. Links to the internal tools are only sent to admins, so the request
+  // carries the session token when there is one. A stale token must not break the login page:
+  // on any error fall back to the anonymous request.
   async function init() {
+    const token = localStorage.getItem('auth_token')
     try {
-      const res = await fetch('/api/config')
+      let res = await fetch('/api/config', token ? { headers: { Authorization: `Token ${token}` } } : undefined)
+      if (res.status === 401) res = await fetch('/api/config')
       const d = await res.json()
       logsUrl.value = d.logs_url || ''
       filesUrl.value = d.files_url || ''

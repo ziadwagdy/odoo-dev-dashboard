@@ -436,7 +436,8 @@ def create_odoo_database(project_name, db_port, dbname, demo=False):
     _check_db_name(project_name)
     if dbname in list_database_names(db_port):
         raise ValueError(f'database {dbname!r} already exists')
-    cmd = ['odoo', '-c', '/etc/odoo/odoo.conf', '-d', dbname, '-i', 'base', '--stop-after-init']
+    cmd = ['odoo', '-c', '/etc/odoo/odoo.conf', '-d', dbname, '-i', 'base', '--stop-after-init',
+           '--no-http', '--workers=0', '--max-cron-threads=0']
     if not demo:
         cmd.append('--without-demo=all')
     exit_code, output = exec_in_container_sync(f'{project_name}-app', cmd)

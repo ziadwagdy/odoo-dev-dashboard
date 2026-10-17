@@ -148,9 +148,9 @@
     <div class="card mb-4">
       <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-3">
         <h3 class="text-sm font-semibold text-slate-300">Submodules</h3>
-        <button class="btn btn-ghost btn-sm w-full sm:w-auto inline-flex items-center gap-1.5 justify-center" @click="updateSubmodules">
+        <button class="btn btn-ghost btn-sm w-full sm:w-auto inline-flex items-center gap-1.5 justify-center" title="Pull the latest commit of every submodule" @click="updateSubmodules">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-          Update All
+          Pull
         </button>
       </div>
       <div v-if="!submodules.length" class="text-sm text-slate-500">No submodules.</div>
@@ -245,7 +245,7 @@ import { ref, computed, watch } from 'vue'
 import { useNotificationsStore } from '@/stores/notifications'
 import { parseLine, type LogLine } from '@/utils/ansi'
 
-const props = defineProps<{ projectName: string; folder: string | null; active: boolean; container: string; canSwitch?: boolean }>()
+const props = defineProps<{ projectName: string; usesHrBase?: boolean; active: boolean; container: string; canSwitch?: boolean }>()
 const emit = defineEmits<{
   'branch-changed': [branch: string]
   'container-restarted': []
@@ -274,7 +274,7 @@ const submoduleBranchData = ref<BranchData>({ local: [], remote: [], current: nu
 const submoduleBranchSearch = ref('')
 
 const isHrBase = computed(() =>
-  (!!props.folder && /hr[-_]base/i.test(props.folder)) ||
+  props.usesHrBase ||
   submodules.value.some(s => /hr[-_]base/i.test(s.path))
 )
 

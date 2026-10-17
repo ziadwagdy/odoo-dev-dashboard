@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { useConfigStore } from '@/stores/config'
 import { ref, computed } from 'vue'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -30,6 +31,7 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('auth_token', data.token)
     localStorage.setItem('auth_user', data.username)
     localStorage.setItem('auth_role', data.role)
+    useConfigStore().init()          // admins get the tool links once signed in
     return null
   }
 

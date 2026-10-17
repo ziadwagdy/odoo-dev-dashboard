@@ -14,6 +14,8 @@ expect() { # description, expected-regex, actual
 }
 
 echo "== dashboard"
+cfg=$(curl -s -m 15 $DASH/api/config 2>/dev/null)
+if [[ "$cfg" == *logs_url* || "$cfg" == *terminal_url* || "$cfg" == *files_url* ]]; then bad "public /api/config leaks internal tool URLs"; else ok "public /api/config exposes only the title"; fi
 expect "SPA served"                         "200"     "$(code $DASH/)"
 expect "/api/auth/me needs a token"         "401"     "$(code $DASH/api/auth/me)"
 expect "/stream/status needs a token"       "401"     "$(code $DASH/stream/status)"

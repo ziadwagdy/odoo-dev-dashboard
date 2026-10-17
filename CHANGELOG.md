@@ -5,6 +5,30 @@ Format: [version] — date
 
 ---
 
+## [1.10.3] — 2026-10-17
+
+### Security / Changed — the dashboard shows what people use, not how the server is wired
+- **Removed from the UI and the API:** Odoo port, DB port, host folder, config-file path, addons paths (container filesystem paths) and the *Addons Paths* card. The overview now shows Odoo version, branch, updates to pull and address. Onboarding no longer displays assigned ports.
+- **`/api/config` is no longer public with internal links:** anonymous users and non-admins only get the dashboard title; the log-viewer/files/terminal URLs go to admins. The container ID (for the log-viewer link) is admin-only.
+- **Server-wide numbers are for managers and admins:** the host health stream, the Health page and the host disk figures in `/api/storage`.
+- The Branches tab learns whether a project uses hr-base from a `uses_hr_base` flag instead of a host path.
+- Fix: Modules tab *Update All* test and UI test harness (headless Chrome, both themes) added: `scripts/test-ui.sh`.
+
+---
+
+## [1.10.2] — 2026-10-17
+
+### Fixed
+- **Open as… showed "This project has no databases yet" on every project** (regression from 1.8.0): the picker read the database list as a bare array, but the API returns `{ databases: [...] }`. Parsing now lives in `utils/databases.ts` with tests.
+- **Deploy / Delete appeared above the tab bar** instead of inside the Manage tab; the panel now renders below the tabs. Structure tests keep every tab panel after the tab bar and Deploy/Delete inside Manage.
+- **User menu dropdown rendered under the page content**: the header now has its own stacking layer (`relative z-30`).
+- **Submodule "Update All" is now "Pull"** (it is a git pull; module updates keep their own *Update All*).
+
+### Changed
+- **Module update API** (`POST /api/modules/<project>/<db>/update/<modules>`): manager/admin only up front (developers used to get a stream URL that then failed with 403), database and module names validated, and every update start is audited with user, IP, database and modules. The module list rejects unsafe database names.
+
+---
+
 ## [1.10.1] — 2026-10-17
 
 ### Fixed

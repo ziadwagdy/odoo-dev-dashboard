@@ -10,7 +10,7 @@ const router = createRouter({
     { path: '/login', component: LoginView, meta: { public: true } },
     { path: '/', component: DashboardView },
     { path: '/project/:name', component: ProjectDetailView },
-    { path: '/health', component: () => import('@/views/HealthView.vue') },
+    { path: '/health', component: () => import('@/views/HealthView.vue'), meta: { managerOrAdmin: true } },
     { path: '/onboard', component: () => import('@/views/OnboardView.vue'), meta: { managerOrAdmin: true } },
     { path: '/users', component: () => import('@/views/UsersView.vue'), meta: { adminOnly: true } },
     { path: '/security', component: () => import('@/views/SecurityView.vue'), meta: { adminOnly: true } },

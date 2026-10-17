@@ -26,7 +26,7 @@
     <div class="flex flex-col flex-1 min-w-0 overflow-hidden">
 
       <!-- Top header bar -->
-      <header class="flex items-center gap-3 px-4 md:px-6 py-3 border-b border-border bg-surface/60 backdrop-blur-sm shrink-0">
+      <header class="relative z-30 flex items-center gap-3 px-4 md:px-6 py-3 border-b border-border bg-surface/60 backdrop-blur-sm shrink-0">
 
         <!-- Hamburger — mobile only -->
         <button
