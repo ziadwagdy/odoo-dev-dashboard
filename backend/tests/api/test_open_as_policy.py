@@ -73,10 +73,11 @@ def test_manager_cannot_open_the_administrator_of_a_non_neutralized_db(people, s
     assert _open(people['manager'], 'admin', reason='verify something important').status_code == 403
 
 
-def test_admin_on_non_neutralized_db_needs_a_reason(people, state):
+def test_admin_cannot_open_non_neutralized_db_even_with_a_reason(people, state):
     state['neutralized'] = False
-    assert _open(people['admin'], 'sara').status_code == 400
-    assert _open(people['admin'], 'sara', reason='customer data repair 4521').status_code == 200
+    assert _open(people['admin'], 'sara').status_code == 403
+    assert _open(people['admin'], 'sara', reason='customer data repair 4521').status_code == 403
+    assert state['url_calls'] == []
 
 
 def test_unknown_login_is_a_400(people, state):
@@ -90,10 +91,10 @@ def test_login_users_lists_what_the_caller_may_do(people, state):
     assert by_login['admin']['why'] and users['neutralized'] is True
 
 
-def test_login_users_marks_where_a_reason_is_needed(people, state):
+def test_login_users_denies_every_user_without_neutralization(people, state):
     state['neutralized'] = False
     users = people['admin'].get('/api/db/alpha/login-users/db1').json()
-    assert all(u['reason_required'] for u in users['users'])
+    assert all(not u['allowed'] for u in users['users'])
     assert users['neutralized'] is False
 
 

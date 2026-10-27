@@ -43,9 +43,9 @@ def test_manager_ordinary_user_neutralized_needs_no_reason():
     assert d.allowed and not d.reason_required
 
 
-def test_manager_ordinary_user_in_non_neutralized_db_needs_a_reason():
+def test_manager_ordinary_user_in_non_neutralized_db_is_denied():
     d = decide('manager', False, False)
-    assert d.allowed and d.reason_required
+    assert not d.allowed
 
 
 def test_manager_administrator_in_neutralized_db_needs_a_reason():
@@ -58,23 +58,30 @@ def test_manager_may_not_open_an_administrator_of_a_non_neutralized_db():
     assert not d.allowed
 
 
-# ── admins: everything, but production-like databases need a reason ────────
+# ── admins: neutralization is mandatory ───────────────────────────────────
 def test_admin_neutralized_db_needs_no_reason_even_for_admin_target():
     d = decide('admin', True, True)
     assert d.allowed and not d.reason_required
 
 
-def test_admin_non_neutralized_db_needs_a_reason():
+def test_admin_non_neutralized_db_is_denied():
     d = decide('admin', True, False)
-    assert d.allowed and d.reason_required
+    assert not d.allowed
+
+
+@pytest.mark.parametrize('role,admin_target,neutralized',
+                         itertools.product(ROLES, [True, False], [False, None]))
+def test_all_roles_fail_closed_without_verified_neutralization(role, admin_target, neutralized):
+    d = decide(role, admin_target, neutralized, reason='customer ticket #4521 repro')
+    assert not d.allowed and not d.satisfied
 
 
 # ── reasons ───────────────────────────────────────────────────────────────
 def test_a_required_reason_must_be_meaningful():
-    assert not decide('admin', False, False, reason='').satisfied
-    assert not decide('admin', False, False, reason='ok').satisfied
-    assert not decide('admin', False, False, reason='   ').satisfied
-    assert decide('admin', False, False, reason='customer ticket #4521 repro').satisfied
+    assert not decide('manager', True, True, reason='').satisfied
+    assert not decide('manager', True, True, reason='ok').satisfied
+    assert not decide('manager', True, True, reason='   ').satisfied
+    assert decide('manager', True, True, reason='customer ticket #4521 repro').satisfied
 
 
 def test_satisfied_is_true_when_no_reason_is_needed():

@@ -5,6 +5,7 @@
 #   --ui    : additionally the headless-Chrome UI tests (both themes) against the running dashboard
 set -euo pipefail
 cd "$(dirname "$0")/.."
+python3 -m unittest discover -s scripts/tests -p test_dashboard_sso.py
 echo "### backend tests";  scripts/test-backend.sh
 echo "### frontend tests"; scripts/test-frontend.sh
 for arg in "$@"; do

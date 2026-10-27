@@ -328,6 +328,15 @@ const faqs = [
 
 const changelog = [
   {
+    version: '1.10.6',
+    date: '2026-10-27',
+    items: [
+      'fix: Open as links remain valid for 60 seconds, including when page startup is slow',
+      'security: Open as requires verified database neutralization for every role',
+      'maintenance: the shared login addon is now tracked in the dashboard repository',
+    ],
+  },
+  {
     version: '1.4.0',
     date: '2026-04-14',
     items: [

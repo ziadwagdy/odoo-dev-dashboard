@@ -2,11 +2,11 @@
 
 Pure function, no I/O: the whole role x target x database-state matrix is unit tested.
 
-Rules (least privilege, production-like databases are the exception that needs a reason):
+Rules (development-only host; neutralization is mandatory for every role):
   developer  ordinary users, neutralized databases only, no reason needed
-  manager    ordinary users anywhere (reason if the database is not neutralized);
-             administrators only in neutralized databases, with a reason
-  admin      anything (reason if the database is not neutralized)
+  manager    ordinary users in neutralized databases;
+             administrators in neutralized databases, with a reason
+  admin      anything in neutralized databases
   anyone else (no role, unknown role): denied
 """
 from dataclasses import dataclass
@@ -29,23 +29,18 @@ def _decision(allowed, reason_required, message, reason):
 
 
 def can_open_as(role, *, target_is_admin, db_neutralized, reason=''):
+    if db_neutralized is not True:
+        return _decision(False, False,
+                         'This database must be neutralized and verified before signing in.', reason)
     if role == 'admin':
-        return _decision(True, not db_neutralized, '', reason)
+        return _decision(True, False, '', reason)
 
     if role == 'manager':
-        if target_is_admin and not db_neutralized:
-            return _decision(False, False,
-                             'Signing in as an administrator of a database that is not neutralized is limited to admins.',
-                             reason)
-        return _decision(True, target_is_admin or not db_neutralized, '', reason)
+        return _decision(True, target_is_admin, '', reason)
 
     if role == 'developer':
         if target_is_admin:
             return _decision(False, False, 'Only managers and admins may sign in as an administrator.', reason)
-        if not db_neutralized:
-            return _decision(False, False,
-                             'This database is not neutralized (it may hold live data and integrations). '
-                             'Ask a manager.', reason)
         return _decision(True, False, '', reason)
 
     return _decision(False, False, 'Your role does not allow signing in to databases.', reason)

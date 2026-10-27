@@ -5,6 +5,24 @@ Format: [version] — date
 
 ---
 
+## [1.10.6] — 2026-10-27
+
+### Fixed
+- **Open as…** links now remain valid for their full signed lifetime (60 seconds by default). The shared login addon previously rejected links more than five seconds old, so slower page startup could produce “This sign-in link is invalid or has expired.” before expiry.
+- Preserve signature validation, database/user binding, expiry limits, and one-time-use protection; allow at most five seconds of future clock skew.
+
+### Security
+- **Open as…** requires verified database neutralization for every role, including admins and managers. Failed or unknown neutralization cannot be bypassed with a reason.
+
+### Maintenance
+- Track the shared `dashboard_login` addon in this repository, with instructions for syncing it to local development instances. Existing workers must restart to load the update.
+
+### Validation
+- Seven token-verification regression tests and 54 targeted backend tests passed.
+- A live local Sivas check accepted a 27-second-old link and created an authenticated admin session; replayed, expired, future-dated, and tampered links were rejected.
+
+---
+
 ## [1.10.3] — 2026-10-17
 
 ### Security / Changed — the dashboard shows what people use, not how the server is wired
